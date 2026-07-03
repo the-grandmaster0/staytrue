@@ -21,6 +21,8 @@ import {
 } from '../hooks/useBuddies';
 import { SkeletonBuddyCard } from './Skeleton';
 import { EmptyState } from './EmptyState';
+import { AvatarWithPresence, OnlineBadge } from './OnlineBadge';
+import { usePresenceFeed } from '../hooks/usePresence';
 import type { Buddy } from '../types/buddy';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -43,7 +45,11 @@ const BuddyCard: React.FC<BuddyCardProps> = ({ buddy, goalId, onRemove, isRemovi
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-app-panel border border-app-border-active/20 p-4 animate-fade-in glow-green">
       {/* Avatar + info */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="h-10 w-10 rounded-none bg-app-accent-bg border border-app-border-active/40 flex items-center justify-center shrink-0 overflow-hidden">
+        <AvatarWithPresence
+          userId={buddy.buddy_id}
+          size="sm"
+          className="h-10 w-10 rounded-none bg-app-accent-bg border border-app-border-active/40 overflow-hidden"
+        >
           {buddy.profile?.avatar_url ? (
             <img
               src={buddy.profile.avatar_url}
@@ -51,14 +57,14 @@ const BuddyCard: React.FC<BuddyCardProps> = ({ buddy, goalId, onRemove, isRemovi
               className="h-full w-full object-cover"
             />
           ) : (
-            <Users className="h-4 w-4 text-app-text-primary" />
+            <div className="h-10 w-10 flex items-center justify-center">
+              <Users className="h-4 w-4 text-app-text-primary" />
+            </div>
           )}
-        </div>
+        </AvatarWithPresence>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-app-text-body uppercase truncate">{name}</p>
-          <p className="text-[10px] text-app-text-secondary lowercase truncate">
-            {buddy.profile?.email}
-          </p>
+          <OnlineBadge userId={buddy.buddy_id} variant="icon" className="mt-0.5" />
         </div>
       </div>
 
@@ -169,6 +175,10 @@ export const BuddyManager: React.FC<BuddyManagerProps> = ({ goalId }) => {
   const { data: buddies = [], isLoading: buddiesLoading } = useGoalBuddies(goalId);
   const sendRequest = useSendBuddyRequest();
   const removeBuddy = useRemoveBuddy();
+
+  // Subscribe to realtime last_seen_at updates for all current buddies
+  const buddyIds = buddies.map((b) => b.buddy_id);
+  usePresenceFeed(buddyIds);
 
   // Build sets for quick status lookup
   const acceptedBuddyIds = new Set(buddies.map((b) => b.buddy_id));

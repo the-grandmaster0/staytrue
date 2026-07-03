@@ -1,11 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
   User as UserIcon, Camera, Check, Loader2, Globe,
-  AtSign, FileText, Eye, EyeOff, ExternalLink, Trash2, Bell, AlertTriangle,
+  AtSign, FileText, Eye, EyeOff, ExternalLink, Trash2, Bell, AlertTriangle, LogOut, X,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
@@ -37,14 +37,22 @@ const profileSchema = z.object({
 type FormValues = z.infer<typeof profileSchema>;
 
 export const EditProfile: React.FC = () => {
-  const { user, setProfile } = useAuthStore();
+  const { user, setProfile, signOut } = useAuthStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [showDeleteBox, setShowDeleteBox] = useState(false);
+
+  type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'same';
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
 
   // Fetch full profile
   const { data: profile, isLoading } = useQuery<Profile | null>({
@@ -104,6 +112,53 @@ export const EditProfile: React.FC = () => {
 
   const bioVal = watch('bio') ?? '';
   const isPublic = watch('is_public');
+  const usernameVal = watch('username') ?? '';
+
+  // ── Realtime username availability check ──────────────────────────────────
+  useEffect(() => {
+    const raw = usernameVal.trim().toLowerCase();
+
+    // Empty or too short — reset without querying
+    if (!raw || raw.length < 3) {
+      setUsernameStatus('idle');
+      return;
+    }
+
+    // Same as the current saved username — no need to check
+    if (profile?.username && raw === profile.username.toLowerCase()) {
+      setUsernameStatus('same');
+      return;
+    }
+
+    // Debounce: wait 400ms after the user stops typing before hitting Supabase
+    setUsernameStatus('checking');
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('username', raw)
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          setUsernameStatus('idle');
+          return;
+        }
+
+        // If a row came back and it's NOT the current user, it's taken
+        if (data && data.id !== user?.id) {
+          setUsernameStatus('taken');
+        } else {
+          setUsernameStatus('available');
+        }
+      } catch {
+        setUsernameStatus('idle');
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [usernameVal, profile?.username, user?.id]);
 
   // Save profile
   const saveMutation = useMutation({
@@ -240,16 +295,27 @@ export const EditProfile: React.FC = () => {
             Manage your public presence and preferences
           </p>
         </div>
-        {profile?.username && (
-          <Link
-            to={`/u/${profile.username}`}
-            target="_blank"
-            className="btn-ghost flex items-center gap-1.5 px-3 py-2 text-sm cursor-pointer"
+        <div className="flex items-center gap-2">
+          {/* Sign out — only shown on mobile (desktop has it in sidebar) */}
+          <button
+            onClick={handleSignOut}
+            className="md:hidden flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer uppercase tracking-wider"
+            style={{ clipPath: 'polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px))', fontFamily: 'var(--font-display)' }}
           >
-            <ExternalLink className="h-4 w-4" />
-            View profile
-          </Link>
-        )}
+            <LogOut className="h-3.5 w-3.5" />
+            Sign out
+          </button>
+          {profile?.username && (
+            <Link
+              to={`/u/${profile.username}`}
+              target="_blank"
+              className="btn-ghost flex items-center gap-1.5 px-3 py-2 text-sm cursor-pointer"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">View profile</span>
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Avatar */}
@@ -327,11 +393,38 @@ export const EditProfile: React.FC = () => {
               <label className="block text-sm font-medium text-app-text-body mb-1.5">
                 <span className="flex items-center gap-1.5"><AtSign className="h-3.5 w-3.5" /> Username</span>
               </label>
-              <input type="text" {...register('username')} placeholder="jane_doe"
-                className={`input-field w-full px-4 py-2.5 text-sm ${errors.username ? 'border-red-500/60' : ''}`} />
-              {errors.username
-                ? <p className="mt-1 text-xs text-red-400">{errors.username.message}</p>
-                : <p className="mt-1 text-xs text-app-text-dim">Your public URL: /u/username</p>}
+              <div className="relative">
+                <input type="text" {...register('username')} placeholder="jane_doe"
+                  className={`input-field w-full px-4 py-2.5 text-sm pr-9 ${
+                    errors.username ? 'border-red-500/60' :
+                    usernameStatus === 'taken' ? 'border-red-500/60' :
+                    usernameStatus === 'available' ? 'border-green-500/60' : ''
+                  }`} />
+                {/* Status icon */}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {usernameStatus === 'checking' && (
+                    <Loader2 className="h-4 w-4 text-app-text-dim animate-spin" />
+                  )}
+                  {usernameStatus === 'available' && (
+                    <Check className="h-4 w-4 text-green-400" />
+                  )}
+                  {usernameStatus === 'taken' && (
+                    <X className="h-4 w-4 text-red-400" />
+                  )}
+                </div>
+              </div>
+              {/* Status message */}
+              {errors.username ? (
+                <p className="mt-1 text-xs text-red-400">{errors.username.message}</p>
+              ) : usernameStatus === 'available' ? (
+                <p className="mt-1 text-xs text-green-400 font-mono">// username available</p>
+              ) : usernameStatus === 'taken' ? (
+                <p className="mt-1 text-xs text-red-400 font-mono">// username already taken</p>
+              ) : usernameStatus === 'same' ? (
+                <p className="mt-1 text-xs text-app-text-dim font-mono">// current username</p>
+              ) : (
+                <p className="mt-1 text-xs text-app-text-dim">Your public URL: /u/username</p>
+              )}
             </div>
           </div>
 
@@ -405,7 +498,7 @@ export const EditProfile: React.FC = () => {
         </div>
 
         <div className="flex justify-end">
-          <button type="submit" disabled={saveMutation.isPending}
+          <button type="submit" disabled={saveMutation.isPending || usernameStatus === 'taken' || usernameStatus === 'checking'}
             className="btn-primary flex items-center gap-2 px-6 py-2.5 text-sm font-semibold cursor-pointer disabled:opacity-50">
             {saveMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</> : 'Save changes'}
           </button>

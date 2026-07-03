@@ -10,6 +10,8 @@ import { sanitize } from '../lib/sanitize';
 import { useMessages, useSendMessage, useMarkMessagesRead } from '../hooks/useMessages';
 import { useGoalBuddies } from '../hooks/useBuddies';
 import { useAuthStore } from '../store/useAuthStore';
+import { AvatarWithPresence, OnlineBadge } from './OnlineBadge';
+import { usePresenceFeed } from '../hooks/usePresence';
 import { REACTIONS } from '../types/message';
 import type { Message } from '../types/message';
 import type { Profile } from '../store/useAuthStore';
@@ -169,6 +171,9 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
   const buddy = buddies[0] ?? null;
   const buddyProfile = buddy?.profile ?? null;
 
+  // Subscribe to realtime last_seen_at for the buddy
+  usePresenceFeed(buddy ? [buddy.buddy_id] : []);
+
   // Build a profile map for rendering
   const profileMap = new Map<string, Profile | null>();
   if (user) profileMap.set(user.id, null); // we don't need our own profile for display
@@ -242,18 +247,24 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
 
       {/* ── Chat header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border bg-app-bg shrink-0">
-        <div className="h-8 w-8 rounded-full bg-app-accent-bg border border-app-border flex items-center justify-center overflow-hidden shrink-0">
+        <AvatarWithPresence
+          userId={buddy?.buddy_id}
+          size="md"
+          className="h-8 w-8 rounded-full bg-app-accent-bg border border-app-border overflow-hidden"
+        >
           {buddyProfile?.avatar_url ? (
-            <img src={buddyProfile.avatar_url} alt="" className="h-full w-full object-cover" />
+            <img src={buddyProfile.avatar_url} alt="" className="h-8 w-8 object-cover" />
           ) : (
-            <Users className="h-4 w-4 text-app-text-primary" />
+            <div className="h-8 w-8 flex items-center justify-center">
+              <Users className="h-4 w-4 text-app-text-primary" />
+            </div>
           )}
-        </div>
+        </AvatarWithPresence>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-app-text-body truncate">
             {buddyProfile?.full_name || buddyProfile?.email || 'Your buddy'}
           </p>
-          <p className="text-xs text-app-text-secondary">{messages.length} message{messages.length !== 1 ? 's' : ''}</p>
+          <OnlineBadge userId={buddy?.buddy_id} variant="pill" size="xs" />
         </div>
         <MessageSquare className="h-4 w-4 text-app-text-dim shrink-0" />
       </div>

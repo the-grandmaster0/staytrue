@@ -9,22 +9,25 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { useAuthStore } from '../store/useAuthStore';
 import { unreadCountKey } from '../hooks/useMessages';
+import { usePresenceFeed } from '../hooks/usePresence';
+import { AvatarWithPresence, OnlineBadge } from '../components/OnlineBadge';
 import { SkeletonMessageRow } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';
 import type { Goal } from '../types/goal';
 import type { Message } from '../types/message';
 import { REACTIONS } from '../types/message';
+import type { Profile } from '../store/useAuthStore';
 
 interface GoalWithMessages {
   goal: Goal;
   lastMessage: Message | null;
   unreadCount: number;
+  buddyProfile: Profile | null;
 }
 
 export const Messages: React.FC = () => {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-
   // Mark all messages as read when the user opens this page
   useEffect(() => {
     if (!user) return;
@@ -77,7 +80,16 @@ export const Messages: React.FC = () => {
       if (gErr) throw gErr;
       if (!myGoals || myGoals.length === 0) return [];
 
-      // Step 4: for each of my goals, fetch last message + unread count
+      // Step 4: fetch buddy profiles for presence display
+      const { data: buddyProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, avatar_url, last_seen_at')
+        .in('id', buddyIds as string[]);
+      const profileMap = new Map<string, Profile>(
+        (buddyProfiles ?? []).map((p: Profile) => [p.id, p])
+      );
+
+      // Step 5: for each of my goals, fetch last message + unread count
       // Messages may be stored under any goal_id so query by participants
       const results: GoalWithMessages[] = await Promise.all(
         myGoals.map(async (goal: Goal) => {
@@ -86,7 +98,7 @@ export const Messages: React.FC = () => {
               .from('messages')
               .select('*')
               .or(
-                buddyIds.map((bid: string) =>
+                (buddyIds as string[]).map((bid: string) =>
                   `and(sender_id.eq.${user.id},receiver_id.eq.${bid}),and(sender_id.eq.${bid},receiver_id.eq.${user.id})`
                 ).join(',')
               )
@@ -99,10 +111,19 @@ export const Messages: React.FC = () => {
               .is('read_at', null),
           ]);
 
+          // Find the buddy for this conversation (first match)
+          const buddyRow = buddyRows.find((r: any) =>
+            r.sender_id === user.id || r.receiver_id === user.id
+          );
+          const buddyId = buddyRow
+            ? (buddyRow.sender_id === user.id ? buddyRow.receiver_id : buddyRow.sender_id)
+            : null;
+
           return {
             goal,
             lastMessage: (lastMsgs?.[0] as Message) ?? null,
             unreadCount: unread ?? 0,
+            buddyProfile: buddyId ? (profileMap.get(buddyId) ?? null) : null,
           };
         })
       );
@@ -147,6 +168,10 @@ export const Messages: React.FC = () => {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
+  // Subscribe to realtime presence updates for all buddy profiles in conversations
+  const buddyProfileIds = conversations.map((c) => c.buddyProfile?.id).filter(Boolean) as string[];
+  usePresenceFeed(buddyProfileIds);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -172,7 +197,7 @@ export const Messages: React.FC = () => {
         <EmptyState variant="no-messages" />
       ) : (
         <div className="bg-app-panel border border-app-border rounded-xl divide-y divide-app-border overflow-hidden">
-          {conversations.map(({ goal, lastMessage, unreadCount }) => (
+          {conversations.map(({ goal, lastMessage, unreadCount, buddyProfile }) => (
             <Link
               key={goal.id}
               to={`/dashboard/goals/${goal.id}`}
@@ -186,10 +211,22 @@ export const Messages: React.FC = () => {
                 )}
               </div>
 
-              {/* Avatar placeholder */}
-              <div className="h-10 w-10 rounded-full bg-app-accent-bg border border-app-border flex items-center justify-center shrink-0">
-                <MessageSquare className="h-4 w-4 text-app-text-primary" />
-              </div>
+              {/* Avatar with presence dot */}
+              <AvatarWithPresence
+                userId={buddyProfile?.id}
+                size="sm"
+                className="h-10 w-10 rounded-full bg-app-accent-bg border border-app-border overflow-hidden flex items-center justify-center"
+              >
+                {buddyProfile?.avatar_url ? (
+                  <img
+                    src={buddyProfile.avatar_url}
+                    alt={buddyProfile.full_name || buddyProfile.email || ''}
+                    className="h-10 w-10 object-cover rounded-full"
+                  />
+                ) : (
+                  <MessageSquare className="h-4 w-4 text-app-text-primary" />
+                )}
+              </AvatarWithPresence>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
@@ -199,9 +236,14 @@ export const Messages: React.FC = () => {
                   </p>
                   <span className="chip shrink-0">{goal.category}</span>
                 </div>
-                <p className={`text-xs truncate mt-0.5 ${unreadCount > 0 ? 'text-app-text-secondary font-medium' : 'text-app-text-dim'}`}>
-                  {formatPreview(lastMessage)}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className={`text-xs truncate ${unreadCount > 0 ? 'text-app-text-secondary font-medium' : 'text-app-text-dim'}`}>
+                    {formatPreview(lastMessage)}
+                  </p>
+                  {buddyProfile?.id && (
+                    <OnlineBadge userId={buddyProfile.id} variant="icon" size="xs" className="shrink-0" />
+                  )}
+                </div>
               </div>
 
               {/* Meta */}

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthStore } from '../store/useAuthStore';
 import { registerServiceWorker } from '../hooks/usePushNotifications';
+import { usePresenceTracker } from '../hooks/usePresence';
 import { Loader2 } from 'lucide-react';
 
 interface AuthProviderProps {
@@ -10,6 +11,9 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { setUser, setSession, setProfile, fetchProfile, setLoading, loading } = useAuthStore();
+
+  // Track this user's presence (heartbeat + Supabase Presence channel)
+  usePresenceTracker();
 
   useEffect(() => {
     let mounted = true;

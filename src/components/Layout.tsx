@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { ThemeToggle } from './ThemeToggle';
 import { useUnreadMessageCount } from '../hooks/useMessages';
+import { OnlineBadge } from './OnlineBadge';
 import {
   LayoutDashboard,
   User as UserIcon,
@@ -115,17 +116,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="px-3 py-4 border-t border-app-border space-y-2 shrink-0">
         <ThemeToggle className="w-full" />
         <div
-          className="flex items-center gap-3 p-3 border border-app-border bg-blue-950/30"
+          className="relative flex items-center gap-3 p-3 border border-app-border bg-blue-950/30"
           style={{ clipPath: hexClipXl }}
         >
           <div
-            className="h-9 w-9 border border-blue-500/40 flex items-center justify-center overflow-hidden shrink-0"
+            className="h-9 w-9 border border-blue-500/40 flex items-center justify-center overflow-hidden shrink-0 relative"
             style={{ clipPath: hexClipSm }}
           >
             {profile?.avatar_url
               ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
               : <UserIcon className="h-4 w-4 text-blue-400" />}
+            {/* Online dot — clipped element can't show overflow, so place outside */}
           </div>
+          {/* presence dot sits outside the clipped container */}
+          <OnlineBadge userId={profile?.id} size="sm" className="absolute bottom-3 left-[46px] z-10" />
           <div className="flex-1 min-w-0">
             <p
               className="text-sm font-bold text-app-text-body truncate uppercase tracking-wide"
