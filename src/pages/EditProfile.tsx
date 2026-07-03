@@ -5,9 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
   User as UserIcon, Camera, Check, Loader2, Globe,
-  AtSign, FileText, Eye, EyeOff, ExternalLink, Trash2, Bell,
+  AtSign, FileText, Eye, EyeOff, ExternalLink, Trash2, Bell, AlertTriangle,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { sanitize, sanitizeTrunc } from '../lib/sanitize';
 import { useAuthStore } from '../store/useAuthStore';
@@ -39,9 +39,12 @@ type FormValues = z.infer<typeof profileSchema>;
 export const EditProfile: React.FC = () => {
   const { user, setProfile } = useAuthStore();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showDeleteBox, setShowDeleteBox] = useState(false);
 
   // Fetch full profile
   const { data: profile, isLoading } = useQuery<Profile | null>({
@@ -77,6 +80,25 @@ export const EditProfile: React.FC = () => {
       timezone:      profile?.timezone ?? 'UTC',
       reminder_time: profile?.reminder_time ?? '08:00',
       is_public:     profile?.is_public ?? true,
+    },
+  });
+
+  // Delete account
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('Not authenticated');
+      // Delete profile — cascades to all user data via FK ON DELETE CASCADE
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+      if (error) throw error;
+      // Sign out after deletion
+      await supabase.auth.signOut();
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      navigate('/');
     },
   });
 
@@ -410,6 +432,80 @@ export const EditProfile: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Danger zone — delete account */}
+      <div className="bg-app-panel border border-red-500/20 rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+          <div>
+            <h2 className="text-sm font-bold text-red-400 uppercase tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>
+              DANGER ZONE
+            </h2>
+            <p className="text-xs text-app-text-secondary mt-0.5">
+              Permanently delete your account and all associated data
+            </p>
+          </div>
+        </div>
+
+        {!showDeleteBox ? (
+          <button
+            type="button"
+            onClick={() => setShowDeleteBox(true)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/60 transition-colors cursor-pointer rounded-sm uppercase tracking-wider"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete my account
+          </button>
+        ) : (
+          <div className="space-y-4 border border-red-500/30 rounded-lg p-4 bg-red-500/5">
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-red-400">This action is irreversible.</p>
+              <p className="text-xs text-app-text-secondary leading-relaxed">
+                All your goals, check-ins, streaks, messages, badges, and account data will be
+                permanently deleted. This cannot be undone.
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-app-text-secondary mb-2 uppercase tracking-wider">
+                Type <span className="text-red-400 font-bold">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder="DELETE"
+                className="input-field w-full px-4 py-2.5 text-sm border-red-500/30 focus:border-red-500"
+              />
+            </div>
+            {deleteMutation.isError && (
+              <p className="text-xs text-red-400">
+                {(deleteMutation.error as Error).message}
+              </p>
+            )}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowDeleteBox(false); setDeleteConfirm(''); }}
+                className="btn-ghost px-4 py-2 text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteConfirm !== 'DELETE' || deleteMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white border border-red-500 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed rounded-sm uppercase tracking-wider"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                {deleteMutation.isPending
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Deleting...</>
+                  : <><Trash2 className="h-3.5 w-3.5" /> Permanently delete</>}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
