@@ -102,6 +102,13 @@ export function usePresenceTracker() {
       .eq('id', userId);
   }, []);
 
+  const clearHeartbeat = useCallback(async (userId: string) => {
+    await supabase
+      .from('profiles')
+      .update({ last_seen_at: null })
+      .eq('id', userId);
+  }, []);
+
   useEffect(() => {
     if (!user) return;
 
@@ -117,9 +124,11 @@ export function usePresenceTracker() {
 
     return () => {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      // Clear last_seen_at so tab-close / navigation shows offline immediately
+      clearHeartbeat(user.id);
       releasePresenceChannel();
     };
-  }, [user, writeHeartbeat]);
+  }, [user, writeHeartbeat, clearHeartbeat]);
 }
 
 // ─── useIsOnline — check a single user's online status ───────────────────────
@@ -170,11 +179,10 @@ export function useIsOnline(userId: string | null | undefined) {
 
   const lastSeenAt = profile?.last_seen_at ?? null;
   const liveOnline = !!(liveOnlineSnapshot.data?.[userId]);
-  const recentlyActive = lastSeenAt
-    ? Date.now() - new Date(lastSeenAt).getTime() < ONLINE_THRESHOLD_MS
-    : false;
 
-  const isOnline = liveOnline || recentlyActive;
+  // isOnline is ONLY driven by the live Presence channel.
+  // last_seen_at is used solely for the "Xm ago" label when offline.
+  const isOnline = liveOnline;
   const label = formatPresenceLabel(isOnline, lastSeenAt);
 
   return { isOnline, lastSeen: lastSeenAt, label };

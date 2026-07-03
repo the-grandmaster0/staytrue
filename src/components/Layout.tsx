@@ -157,9 +157,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* ── Mobile top header ─────────────────────────────────────────────── */}
       <header className="flex items-center justify-between px-4 py-3 bg-app-panel border-b border-app-border md:hidden z-30 sticky top-0 relative">
         <div className="animate-scan-line" />
+        {/* Logo */}
         <div className="flex items-center gap-2.5">
           <div
-            className="h-8 w-8 border border-blue-500/50 flex items-center justify-center relative"
+            className="h-8 w-8 border border-blue-500/50 flex items-center justify-center relative shrink-0"
             style={{ clipPath: hexClipSm }}
           >
             <div className="absolute inset-0 bg-blue-600/15" />
@@ -177,6 +178,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </p>
           </div>
         </div>
+        {/* Right actions — fixed width to keep logo centered */}
         <div className="flex items-center gap-1">
           <ThemeToggle />
           <Link
@@ -197,7 +199,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* ── Main content ──────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 overflow-y-auto pb-20 md:pb-0">
-        <div className="max-w-5xl mx-auto px-5 md:px-8 py-8">
+        <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
           {children}
         </div>
       </main>
@@ -208,14 +210,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         aria-label="Mobile navigation"
       >
-        <div className="flex items-stretch">
+        <div className="grid items-stretch" style={{ gridTemplateColumns: `repeat(${bottomNavItems.length}, 1fr)` }}>
           {bottomNavItems.map(({ label, path, icon: Icon, badge }) => {
             const active = isActive(path);
             return (
               <Link
                 key={label}
                 to={path}
-                className={`relative flex flex-col items-center justify-center flex-1 min-h-[58px] gap-1 transition-all duration-150 ${
+                className={`relative flex flex-col items-center justify-center min-h-[58px] gap-1 transition-all duration-150 ${
                   active ? 'text-blue-400 bg-blue-950/40' : 'text-app-text-dim hover:text-app-text-secondary'
                 }`}
                 aria-label={label}

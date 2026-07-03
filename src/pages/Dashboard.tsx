@@ -184,7 +184,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Tabs — hidden on mobile (bottom nav handles switching) */}
-        <div className="hidden sm:flex bg-app-panel border border-app-border rounded-xl p-1 gap-0.5">
+        <div className="hidden sm:flex bg-app-panel border border-app-border rounded-xl p-1 gap-0.5 shrink-0">
           {tabs.map(({ id, label, icon: Icon, badge }) => (
             <button
               key={id}
@@ -213,44 +213,46 @@ export const Dashboard: React.FC = () => {
       {activeTab === 'goals' && (
         <div className="space-y-5">
           {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center bg-app-panel border border-app-border rounded-xl p-4">
-            {/* Filter pills */}
-            <div className="flex bg-app-bg rounded-lg p-1 gap-0.5">
-              {(['all', 'active', 'completed'] as const).map((f) => (
-                <button
-                  key={f}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => { setFilter(f); setPage(1); }}
+          <div className="flex flex-col gap-3 bg-app-panel border border-app-border rounded-xl p-4">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+              {/* Filter pills */}
+              <div className="flex bg-app-bg rounded-lg p-1 gap-0.5 w-full sm:w-auto justify-center">
+                {(['all', 'active', 'completed'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { setFilter(f); setPage(1); }}
+                    style={{ minHeight: '44px' }}
+                    className={`flex-1 sm:flex-none px-4 py-2.5 rounded-md text-sm font-medium cursor-pointer capitalize outline-none focus:outline-none focus:shadow-none transition-colors ${
+                      filter === f ? 'bg-app-panel text-app-text-body border border-app-border' : 'text-app-text-secondary hover:text-app-text-body border border-transparent'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search */}
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-app-text-dim" />
+                <input
+                  type="text" value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  placeholder="Search goals..."
+                  className="input-field w-full pl-9 pr-4 py-3 text-sm"
                   style={{ minHeight: '44px' }}
-                  className={`px-4 py-2.5 rounded-md text-sm font-medium cursor-pointer capitalize outline-none focus:outline-none focus:shadow-none transition-colors ${
-                    filter === f ? 'bg-app-panel text-app-text-body border border-app-border' : 'text-app-text-secondary hover:text-app-text-body border border-transparent'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+                />
+              </div>
 
-            {/* Search */}
-            <div className="relative flex-1 w-full sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-app-text-dim" />
-              <input
-                type="text" value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                placeholder="Search goals..."
-                className="input-field w-full pl-9 pr-4 py-3 text-sm"
+              <button
+                onClick={() => setIsCreateOpen(true)}
                 style={{ minHeight: '44px' }}
-              />
+                className="btn-primary flex items-center justify-center gap-2 px-4 py-2.5 text-sm cursor-pointer shrink-0 w-full sm:w-auto"
+              >
+                <Plus className="h-4 w-4" />
+                New goal
+              </button>
             </div>
-
-            <button
-              onClick={() => setIsCreateOpen(true)}
-              style={{ minHeight: '44px' }}
-              className="btn-primary flex items-center gap-2 px-4 py-2.5 text-sm cursor-pointer shrink-0 w-full sm:w-auto justify-center"
-            >
-              <Plus className="h-4 w-4" />
-              New goal
-            </button>
           </div>
 
           {/* Goal list */}

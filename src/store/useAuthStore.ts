@@ -64,6 +64,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   signOut: async () => {
     set({ loading: true });
     try {
+      // Get current user id before clearing state
+      const userId = useAuthStore.getState().user?.id;
+      // Clear last_seen_at so the user immediately appears offline to others
+      if (userId) {
+        await supabase
+          .from('profiles')
+          .update({ last_seen_at: null })
+          .eq('id', userId);
+      }
       await supabase.auth.signOut();
       set({ user: null, session: null, profile: null });
     } catch (err) {
