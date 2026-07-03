@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { ThemeToggle } from './ThemeToggle';
 import { useUnreadMessageCount } from '../hooks/useMessages';
@@ -21,13 +21,11 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { profile, signOut } = useAuthStore();
-  const navigate = useNavigate();
   const location = useLocation();
   const { data: unreadCount = 0 } = useUnreadMessageCount();
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/');
   };
 
   const sidebarNavItems = [
