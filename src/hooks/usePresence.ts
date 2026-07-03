@@ -54,14 +54,16 @@ function acquirePresenceChannel(userId: string) {
       notifyListeners();
     })
     .on('presence', { event: 'join' }, ({ newPresences }) => {
-      newPresences.forEach((p: { user_id: string }) => {
-        if (p.user_id) liveOnlineState[p.user_id] = true;
+      newPresences.forEach((p) => {
+        const userId = (p as { user_id?: string }).user_id;
+        if (userId) liveOnlineState[userId] = true;
       });
       notifyListeners();
     })
     .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-      leftPresences.forEach((p: { user_id: string }) => {
-        if (p.user_id) delete liveOnlineState[p.user_id];
+      leftPresences.forEach((p) => {
+        const userId = (p as { user_id?: string }).user_id;
+        if (userId) delete liveOnlineState[userId];
       });
       notifyListeners();
     })

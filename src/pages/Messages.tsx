@@ -18,11 +18,13 @@ import type { Message } from '../types/message';
 import { REACTIONS } from '../types/message';
 import type { Profile } from '../store/useAuthStore';
 
+type BuddyProfileRow = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'last_seen_at'>;
+
 interface GoalWithMessages {
   goal: Goal;
   lastMessage: Message | null;
   unreadCount: number;
-  buddyProfile: Profile | null;
+  buddyProfile: BuddyProfileRow | null;
 }
 
 export const Messages: React.FC = () => {
@@ -85,8 +87,10 @@ export const Messages: React.FC = () => {
         .from('profiles')
         .select('id, full_name, email, avatar_url, last_seen_at')
         .in('id', buddyIds as string[]);
-      const profileMap = new Map<string, Profile>(
-        (buddyProfiles ?? []).map((p: Profile) => [p.id, p])
+
+      type BuddyProfileRow = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'last_seen_at'>;
+      const profileMap = new Map<string, BuddyProfileRow>(
+        (buddyProfiles ?? []).map((p: BuddyProfileRow) => [p.id, p])
       );
 
       // Step 5: for each of my goals, fetch last message + unread count
