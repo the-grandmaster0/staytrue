@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
+  <!-- Dark navy background -->
+  <rect width="192" height="192" fill="#050a18"/>
+  <!-- Hexagonal frame -->
+  <polygon
+    points="96,16 168,56 168,136 96,176 24,136 24,56"
+    fill="#080f24"
+    stroke="#1d4ed8"
+    stroke-width="4"
+  />
+  <!-- Inner hex ring -->
+  <polygon
+    points="96,30 154,64 154,128 96,162 38,128 38,64"
+    fill="none"
+    stroke="#2563eb"
+    stroke-width="1.5"
+    opacity="0.4"
+  />
+  <!-- Corner accents -->
+  <path d="M24 62 L24 48 L36 48" stroke="#3b82f6" stroke-width="3" fill="none" opacity="0.6"/>
+  <path d="M168 130 L168 144 L156 144" stroke="#3b82f6" stroke-width="3" fill="none" opacity="0.6"/>
+  <!-- Zap bolt -->
+  <path
+    d="M112 48L72 100H96L80 144L128 92H104L112 48Z"
+    fill="#1d4ed8"
+  />
+  <path
+    d="M112 48L72 100H96L80 144L128 92H104L112 48Z"
+    fill="url(#zapGrad)"
+  />
+  <defs>
+    <linearGradient id="zapGrad" x1="72" y1="48" x2="128" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+</svg>
