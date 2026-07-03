@@ -432,14 +432,22 @@
 .animate-wait-ping { animation: waitPing 1.8s ease-in-out infinite; }
 
 @keyframes scanLine {
-  0%   { transform: translateY(0); }
-  100% { transform: translateY(2000%); }
+  0%   { background-position: 0 -100%; }
+  100% { background-position: 0 200%; }
 }
 .animate-scan-line {
-  position: absolute; left: 0; right: 0; top: 0;
-  height: 1px;
-  background: linear-gradient(transparent, rgba(37,99,235,0.5), transparent);
-  animation: scanLine 2.5s linear infinite;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 45%,
+    rgba(37, 99, 235, 0.4) 50%,
+    transparent 55%,
+    transparent 100%
+  );
+  background-size: 100% 400%;
+  animation: scanLine 3s linear infinite;
   pointer-events: none;
 }
 
