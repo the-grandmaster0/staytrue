@@ -72,7 +72,7 @@ export const Home: React.FC = () => {
     <div className="min-h-screen bg-app-bg text-app-text-body">
 
       {/* ── Nav ───────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-app-border bg-app-panel relative overflow-hidden">
+      <header className="sticky top-0 z-40 border-b border-app-border bg-app-panel relative">
         <div className="animate-scan-line" />
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-2.5 shrink-0">

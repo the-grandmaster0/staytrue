@@ -65,7 +65,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="h-20 flex items-center justify-between px-5 border-b border-app-border shrink-0 relative overflow-hidden">
+      <div className="h-20 flex items-center justify-between px-5 border-b border-app-border shrink-0 relative">
         <div className="animate-scan-line" />
         <div className="flex items-center gap-3">
           <div
@@ -151,7 +151,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div className="min-h-screen bg-app-bg text-app-text-body flex flex-col md:flex-row">
 
       {/* ── Mobile top header ─────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-4 py-3 bg-app-panel border-b border-app-border md:hidden z-30 sticky top-0 relative overflow-hidden">
+      <header className="flex items-center justify-between px-4 py-3 bg-app-panel border-b border-app-border md:hidden z-30 sticky top-0 relative">
         <div className="animate-scan-line" />
         <div className="flex items-center gap-2.5">
           <div

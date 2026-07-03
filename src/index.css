@@ -90,49 +90,7 @@
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
 @layer base {
-  /* Remove focus ring on mouse/touch click, keep it for keyboard nav */
-  :focus:not(:focus-visible) {
-    outline: none !important;
-    box-shadow: none !important;
-  }
-
-  :focus-visible {
-    outline: 2px solid #2563eb;
-    outline-offset: 2px;
-  }
-
-  /* Belt-and-braces: kill webkit tap highlight and selection flash */
-  * {
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-  }
-
-  button,
-  a,
-  [role="switch"],
-  [role="tab"],
-  [role="button"] {
-    outline: none;
-  }
-
-  button:focus,
-  a:focus,
-  [role="switch"]:focus,
-  [role="tab"]:focus {
-    outline: none !important;
-    box-shadow: none !important;
-  }
-
-  button:focus-visible,
-  a:focus-visible,
-  [role="switch"]:focus-visible {
-    outline: 2px solid #2563eb !important;
-    outline-offset: 2px;
-  }
-
   body {
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
     background:
       linear-gradient(180deg, rgba(37,99,235,0.06) 0%, transparent 40%),
       linear-gradient(90deg, rgba(29,78,216,0.04) 0%, transparent 50%),
@@ -432,22 +390,14 @@
 .animate-wait-ping { animation: waitPing 1.8s ease-in-out infinite; }
 
 @keyframes scanLine {
-  0%   { background-position: 0 -100%; }
-  100% { background-position: 0 200%; }
+  0%   { top: -2px; }
+  100% { top: 100%; }
 }
 .animate-scan-line {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    transparent 45%,
-    rgba(37, 99, 235, 0.4) 50%,
-    transparent 55%,
-    transparent 100%
-  );
-  background-size: 100% 400%;
-  animation: scanLine 3s linear infinite;
+  position: absolute; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(transparent, rgba(37,99,235,0.5), transparent);
+  animation: scanLine 2.5s linear infinite;
   pointer-events: none;
 }
 
