@@ -2,8 +2,6 @@
 
 > A modern, privacy-focused accountability platform where you set goals, track progress, and stay motivated with friends or anonymous buddies.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/accountability-app)
-
 ---
 
 ## 🌟 Features
@@ -77,7 +75,7 @@
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/accountability-app.git
+git clone https://github.com/the-grandmaster0/staytrue.git
 cd accountability-app
 npm install
 ```
@@ -252,7 +250,6 @@ StayTrue follows security best practices:
 - ✅ **Buddy verification**: Messages require an accepted buddy_request (subquery)
 - ✅ **Least privilege**: Users can only access their own data + shared data
 
-See [SECURITY.md](SECURITY.md) for full details and known limitations.
 
 ---
 
@@ -299,16 +296,16 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/accountability-app/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/accountability-app/discussions)
-- **Email**: support@example.com
+- **Issues**: [GitHub Issues](https://github.com/the-grandmaster0/staytrue/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/the-grandmaster0/staytrue/discussions)
+- **Email**: 
 
 ---
 
 <div align="center">
 
-**Built with ❤️ by [Your Name](https://github.com/yourusername)**
+**Built with ❤️ by [Aditya Jha](https://github.com/the-grandmaster0)**
 
-[⭐ Star this repo](https://github.com/yourusername/accountability-app) if you found it helpful!
+[⭐ Star this repo](https://github.com/the-grandmaster0/staytrue) if you found it helpful!
 
 </div>
