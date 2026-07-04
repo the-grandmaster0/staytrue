@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { ThemeToggle } from './ThemeToggle';
 import { useUnreadMessageCount } from '../hooks/useMessages';
@@ -24,12 +24,17 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { profile, signOut } = useAuthStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadMessageCount();
   const { data: pendingChallenges = [] } = usePendingChallenges();
   const challengeBadge = pendingChallenges.length;
 
   const handleSignOut = async () => {
     await signOut();
+    // Replace the entire history stack with just the home page so pressing
+    // the hardware back button doesn't cycle through dashboard pages.
+    window.history.replaceState(null, '', '/');
+    navigate('/', { replace: true });
   };
 
   const sidebarNavItems = [
@@ -46,7 +51,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { label: 'Buddies',    path: '/dashboard?tab=buddies',   icon: Users,           badge: 0              },
     { label: 'Messages',   path: '/dashboard/messages',      icon: MessageSquare,   badge: unreadCount    },
     { label: 'Challenges', path: '/dashboard/challenges',    icon: Swords,          badge: challengeBadge },
-    { label: 'Profile',    path: '/dashboard?tab=profile',   icon: UserIcon,        badge: 0              },
+    { label: 'Profile',    path: '/dashboard/profile',       icon: UserIcon,        badge: 0              },
   ];
 
   const isActive = (path: string) => {
