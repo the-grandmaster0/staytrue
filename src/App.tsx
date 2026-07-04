@@ -30,10 +30,9 @@ const queryClient = new QueryClient({
 
 // Redirect authenticated users away from auth pages
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuthStore();
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  const { user, loading } = useAuthStore();
+  if (loading) return null;
+  if (user) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -48,9 +47,11 @@ const AnimatedRoutes: React.FC = () => {
         <Route
           path="/"
           element={
-            <PageTransition>
-              <Home />
-            </PageTransition>
+            <PublicRoute>
+              <PageTransition>
+                <Home />
+              </PageTransition>
+            </PublicRoute>
           }
         />
 

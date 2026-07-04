@@ -2,7 +2,7 @@
   "name": "StayTrue",
   "short_name": "StayTrue",
   "description": "Track your goals and stay accountable with StayTrue",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
