@@ -24,11 +24,10 @@ const TIMEZONES = [
 const profileSchema = z.object({
   full_name:     z.string().min(2, 'Name must be at least 2 characters'),
   username:      z.string()
-    .min(3, 'Username must be at least 3 characters')
+    .min(4, 'Username must be at least 4 characters')
     .max(30, 'Max 30 characters')
-    .regex(/^[a-z0-9_-]+$/, 'Only lowercase letters, numbers, hyphens and underscores')
-    .optional()
-    .or(z.literal('')),
+    .regex(/^[a-z0-9]/, 'Username must start with a letter or number')
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Only lowercase letters, numbers, hyphens and underscores'),
   bio:           z.string().max(160, 'Max 160 characters').optional(),
   timezone:      z.string().min(1, 'Required'),
   reminder_time: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format').optional(),
@@ -118,7 +117,7 @@ export const EditProfile: React.FC = () => {
     const raw = usernameVal.trim().toLowerCase();
 
     // Empty or too short — reset without querying
-    if (!raw || raw.length < 3) {
+    if (!raw || raw.length < 4) {
       setUsernameStatus('idle');
       return;
     }

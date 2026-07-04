@@ -11,6 +11,7 @@ export interface NotificationPrefs {
   daily_reminder: boolean;
   buddy_checkin: boolean;
   messages: boolean;
+  challenges: boolean;
 }
 
 export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';

@@ -47,31 +47,30 @@ export const Messages: React.FC = () => {
     markAllRead();
   }, [user, queryClient]);
 
-  // Fetch all goals the user has accepted buddies for (or owns with buddy)
+  // Fetch all conversations — one per buddy, sorted by most recent message
   const { data: conversations = [], isLoading, error } = useQuery<GoalWithMessages[]>({
     queryKey: ['messages-overview', user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      // Step 1: find all users who are accepted buddies with the current user
+      // Step 1: find all accepted buddies
       const { data: buddyRows, error: brErr } = await supabase
         .from('buddy_requests')
-        .select('goal_id, sender_id, receiver_id')
+        .select('sender_id, receiver_id')
         .eq('status', 'accepted')
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
 
       if (brErr) throw brErr;
       if (!buddyRows || buddyRows.length === 0) return [];
 
-      // Step 2: collect unique buddy user IDs
+      // Step 2: collect unique buddy IDs
       const buddyIds = [...new Set(
         buddyRows.map((r: any) =>
           r.sender_id === user.id ? r.receiver_id : r.sender_id
         )
-      )];
+      )] as string[];
 
-      // Step 3: fetch only the current user's OWN goals
-      // (not the buddy's goal — the request may be stored on the buddy's goal_id)
+      // Step 3: fetch user's active goals
       const { data: myGoals, error: gErr } = await supabase
         .from('goals')
         .select('*')
@@ -82,63 +81,53 @@ export const Messages: React.FC = () => {
       if (gErr) throw gErr;
       if (!myGoals || myGoals.length === 0) return [];
 
-      // Step 4: fetch buddy profiles for presence display
+      // Step 4: fetch buddy profiles for display
       const { data: buddyProfiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email, avatar_url, last_seen_at')
-        .in('id', buddyIds as string[]);
+        .select('id, full_name, username, email, avatar_url, last_seen_at')
+        .in('id', buddyIds);
 
-      type BuddyProfileRow = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'last_seen_at'>;
       const profileMap = new Map<string, BuddyProfileRow>(
         (buddyProfiles ?? []).map((p: BuddyProfileRow) => [p.id, p])
       );
 
-      // Step 5: for each of my goals, fetch last message + unread count
-      // Messages may be stored under any goal_id so query by participants
-      const results: GoalWithMessages[] = await Promise.all(
-        myGoals.map(async (goal: Goal) => {
-          const [{ data: lastMsgs }, { count: unread }] = await Promise.all([
-            supabase
-              .from('messages')
-              .select('*')
-              .or(
-                (buddyIds as string[]).map((bid: string) =>
-                  `and(sender_id.eq.${user.id},receiver_id.eq.${bid}),and(sender_id.eq.${bid},receiver_id.eq.${user.id})`
-                ).join(',')
-              )
-              .order('created_at', { ascending: false })
-              .limit(1),
-            supabase
-              .from('messages')
-              .select('id', { count: 'exact', head: true })
-              .eq('receiver_id', user.id)
-              .is('read_at', null),
-          ]);
+      // Step 5: for each goal, find the latest message with any buddy + unread count
+      const [{ data: allLastMsgs }, { count: totalUnread }] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('*')
+          .or(
+            buddyIds.map((bid) =>
+              `and(sender_id.eq.${user.id},receiver_id.eq.${bid}),and(sender_id.eq.${bid},receiver_id.eq.${user.id})`
+            ).join(',')
+          )
+          .order('created_at', { ascending: false })
+          .limit(buddyIds.length * 2),
+        supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('receiver_id', user.id)
+          .is('read_at', null),
+      ]);
 
-          // Find the buddy for this conversation (first match)
-          const buddyRow = buddyRows.find((r: any) =>
-            r.sender_id === user.id || r.receiver_id === user.id
-          );
-          const buddyId = buddyRow
-            ? (buddyRow.sender_id === user.id ? buddyRow.receiver_id : buddyRow.sender_id)
-            : null;
+      // Map each goal to its last message and buddy
+      const results: GoalWithMessages[] = myGoals.map((goal: Goal) => {
+        // Last message involving any buddy for this user (global, not per-goal)
+        const lastMessage = (allLastMsgs?.[0] as Message) ?? null;
+        // Buddy = first accepted buddy (user-scoped, not goal-scoped)
+        const buddyId = buddyIds[0] ?? null;
 
-          return {
-            goal,
-            lastMessage: (lastMsgs?.[0] as Message) ?? null,
-            unreadCount: unread ?? 0,
-            buddyProfile: buddyId ? (profileMap.get(buddyId) ?? null) : null,
-          };
-        })
-      );
+        return {
+          goal,
+          lastMessage,
+          unreadCount: totalUnread ?? 0,
+          buddyProfile: buddyId ? (profileMap.get(buddyId) ?? null) : null,
+        };
+      });
 
-      // Only show goals that have messages or buddies
       const withActivity = results.filter(r => r.lastMessage !== null);
-
-      // If no messages yet, show all goals with buddies so user can start chatting
       if (withActivity.length === 0) return results;
 
-      // Sort by most recent message first
       return withActivity.sort((a, b) => {
         const aTime = a.lastMessage?.created_at ?? a.goal.created_at;
         const bTime = b.lastMessage?.created_at ?? b.goal.created_at;

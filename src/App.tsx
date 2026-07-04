@@ -15,6 +15,7 @@ import { GoalDetail } from './pages/GoalDetail';
 import { FindBuddy } from './pages/FindBuddy';
 import { Messages } from './pages/Messages';
 import { Notifications } from './pages/Notifications';
+import { Challenges } from './pages/Challenges';
 import { EditProfile } from './pages/EditProfile';
 import { PublicProfile } from './pages/PublicProfile';
 import { useAuthStore } from './store/useAuthStore';
@@ -133,6 +134,18 @@ const AnimatedRoutes: React.FC = () => {
               <Layout>
                 <PageTransition>
                   <Notifications />
+                </PageTransition>
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/challenges"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <PageTransition>
+                  <Challenges />
                 </PageTransition>
               </Layout>
             </ProtectedRoute>

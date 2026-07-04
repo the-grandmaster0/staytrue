@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Check, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCheckIn, useTodayCheckin } from '../hooks/useCheckins';
+import { useChallenges, useRefreshChallengeScores } from '../hooks/useChallenges';
+import { useAuthStore } from '../store/useAuthStore';
 
 interface CheckInButtonProps {
   goalId: string;
@@ -12,8 +14,11 @@ interface CheckInButtonProps {
 export const CheckInButton: React.FC<CheckInButtonProps> = ({
   goalId, disabled = false, onSuccess, size = 'sm',
 }) => {
+  const { user } = useAuthStore();
   const { data: todayCheckin, isLoading: isCheckingToday } = useTodayCheckin(goalId);
   const checkInMutation = useCheckIn();
+  const { data: challenges = [] } = useChallenges();
+  const refreshScores = useRefreshChallengeScores();
   const [showNote, setShowNote] = useState(false);
   const [note, setNote] = useState('');
 
@@ -24,11 +29,16 @@ export const CheckInButton: React.FC<CheckInButtonProps> = ({
   const doCheckin = (withNote?: string) => {
     checkInMutation.mutate({ goalId, note: withNote?.trim() || undefined }, {
       onSuccess: () => {
-        // Haptic feedback on successful check-in
         if (navigator.vibrate) navigator.vibrate(10);
         setShowNote(false);
         setNote('');
         onSuccess?.();
+        // Refresh scores for any active challenges this user is part of
+        const activeChallenges = challenges.filter(
+          (c) => c.status === 'active' &&
+            (c.challenger_id === user?.id || c.opponent_id === user?.id)
+        );
+        activeChallenges.forEach((c) => refreshScores.mutate(c.id));
       },
     });
   };

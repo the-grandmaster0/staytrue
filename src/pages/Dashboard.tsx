@@ -39,8 +39,7 @@ export const Dashboard: React.FC = () => {
   const [searchParams] = useSearchParams();
   const urlTab = searchParams.get('tab') as 'goals' | 'buddies' | 'profile' | null;
   const [activeTab, setActiveTab] = useState<'goals' | 'buddies' | 'profile'>(urlTab ?? 'goals');
-  const [selectedBuddyGoalId, setSelectedBuddyGoalId] = useState('');
-  const { data: pendingRequests = [] } = useBuddyRequests();
+  const { data: pendingRequests = [] } = useBuddyRequests('incoming');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [search, setSearch] = useState('');
@@ -103,18 +102,6 @@ export const Dashboard: React.FC = () => {
       const { data, error, count } = await q;
       if (error) throw error;
       return { data: (data || []) as Goal[], count: count || 0 };
-    },
-    enabled: !!user,
-  });
-
-  const { data: allActiveGoals = [] } = useQuery<Goal[]>({
-    queryKey: ['goals-all', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase.from('goals')
-        .select('id, title, status').eq('user_id', user.id).order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as Goal[];
     },
     enabled: !!user,
   });
@@ -324,33 +311,8 @@ export const Dashboard: React.FC = () => {
             <BuddyRequestsInbox />
           </div>
 
-          <div className="bg-app-panel border border-app-border rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-app-text-primary" />
-              <h2 className="text-sm font-semibold text-app-text-body">Invite a buddy</h2>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-app-text-body mb-1.5">Select a goal</label>
-              <select
-                value={selectedBuddyGoalId}
-                onChange={(e) => setSelectedBuddyGoalId(e.target.value)}
-                className="input-field w-full px-4 py-2.5 text-sm"
-              >
-                <option value="">Choose a goal...</option>
-                {allActiveGoals.map((g) => (
-                  <option key={g.id} value={g.id}>[{g.status}] {g.title}</option>
-                ))}
-              </select>
-            </div>
-
-            {selectedBuddyGoalId ? (
-              <BuddyManager goalId={selectedBuddyGoalId} />
-            ) : (
-              <div className="border border-app-border border-dashed rounded-xl p-8 text-center">
-                <p className="text-sm text-app-text-secondary">Select a goal above to manage buddies</p>
-              </div>
-            )}
+          <div className="bg-app-panel border border-app-border rounded-xl p-5">
+            <BuddyManager />
           </div>
         </div>
       )}

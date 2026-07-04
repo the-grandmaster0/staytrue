@@ -13,11 +13,10 @@ export type MatchState =
   | { status: 'matched'; buddy: Profile }
   | { status: 'error'; message: string };
 
-// Invalidate all buddy-related query keys for a goal so UI updates instantly
-function invalidateBuddyQueries(queryClient: ReturnType<typeof useQueryClient>, goalId: string) {
-  queryClient.invalidateQueries({ queryKey: ['goal-buddies', goalId] });
-  queryClient.invalidateQueries({ queryKey: ['goal-buddy-requests', goalId] });
-  // Also invalidate the goals-find-buddy list so the page stays fresh
+// Invalidate all buddy-related query keys so UI updates instantly after a match
+function invalidateBuddyQueries(queryClient: ReturnType<typeof useQueryClient>, _goalId: string) {
+  queryClient.invalidateQueries({ queryKey: ['buddies'] });
+  queryClient.invalidateQueries({ queryKey: ['buddy-requests'] });
   queryClient.invalidateQueries({ queryKey: ['goals-find-buddy'] });
 }
 
@@ -52,13 +51,7 @@ export function useStrangerMatch(goalId: string) {
             // Fetch the buddy profile from the newly created buddy_request
             const { data: reqData } = await supabase
               .from('buddy_requests')
-              .select(`
-                sender_id,
-                receiver_id,
-                sender:sender_id(*),
-                receiver:receiver_id(*)
-              `)
-              .eq('goal_id', poolGoalId)
+              .select('sender_id, receiver_id, sender:sender_id(*), receiver:receiver_id(*)')
               .eq('status', 'accepted')
               .or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`)
               .limit(1)

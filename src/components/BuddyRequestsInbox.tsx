@@ -3,7 +3,7 @@ import { Loader2, Users, CheckCircle2, XCircle, Inbox } from 'lucide-react';
 import { useBuddyRequests, useRespondBuddyRequest } from '../hooks/useBuddies';
 
 export const BuddyRequestsInbox: React.FC = () => {
-  const { data: requests = [], isLoading } = useBuddyRequests();
+  const { data: requests = [], isLoading } = useBuddyRequests('incoming');
   const respondMutation = useRespondBuddyRequest();
 
   if (isLoading) {
@@ -28,7 +28,7 @@ export const BuddyRequestsInbox: React.FC = () => {
     <ul className="space-y-3">
       {requests.map((req) => {
         const isProcessing = respondMutation.isPending && respondMutation.variables?.requestId === req.id;
-        const senderName = req.sender?.full_name || req.sender?.email || 'Someone';
+        const senderName = req.sender?.full_name || req.sender?.username || req.sender?.email || 'Someone';
 
         return (
           <li key={req.id} className="flex flex-col sm:flex-row sm:items-center gap-3 bg-app-bg border border-app-border rounded-xl p-4 animate-fade-in">
@@ -40,9 +40,8 @@ export const BuddyRequestsInbox: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-app-text-body truncate">{senderName}</p>
-                <p className="text-xs text-app-text-secondary truncate">{req.sender?.email}</p>
-                {req.goal && (
-                  <p className="text-xs text-app-text-dim mt-0.5 truncate">Goal: {req.goal.title}</p>
+                {req.sender?.username && (
+                  <p className="text-xs text-app-text-dim truncate">@{req.sender.username}</p>
                 )}
               </div>
             </div>

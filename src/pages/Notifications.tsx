@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Bell, BellOff, BellRing, Check, Loader2,
-  ShieldAlert, Flame, MessageSquare, Clock, Users,
+  ShieldAlert, Flame, MessageSquare, Clock, Users, Swords,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -121,7 +121,7 @@ export const Notifications: React.FC = () => {
   });
 
   const currentPrefs: NotificationPrefs = localPrefs ?? {
-    daily_reminder: true, buddy_checkin: true, messages: true,
+    daily_reminder: true, buddy_checkin: true, messages: true, challenges: true,
   };
 
   const handlePrefChange = (key: keyof NotificationPrefs, val: boolean) =>
@@ -310,6 +310,14 @@ export const Notifications: React.FC = () => {
               description="Get notified when someone sends you an accountability buddy request."
               checked={currentPrefs.buddy_checkin}
               onChange={(v) => handlePrefChange('buddy_checkin', v)}
+              disabled={!isSubscribed}
+            />
+            <PrefRow
+              icon={<Swords className="h-4 w-4 text-amber-400" />}
+              label="Challenge alerts"
+              description="Get notified when you receive a challenge, someone accepts yours, or a battle ends."
+              checked={currentPrefs.challenges ?? true}
+              onChange={(v) => handlePrefChange('challenges', v)}
               disabled={!isSubscribed}
             />
           </div>
