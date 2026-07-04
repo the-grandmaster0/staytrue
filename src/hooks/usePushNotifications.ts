@@ -69,7 +69,7 @@ export function usePushNotifications() {
   const { data: prefs, isLoading: prefsLoading } = useQuery<NotificationPrefs>({
     queryKey: ['notification-prefs', user?.id],
     queryFn: async () => {
-      if (!user) return { daily_reminder: true, buddy_checkin: true, messages: true };
+      if (!user) return { daily_reminder: true, buddy_checkin: true, messages: true, challenges: true } as NotificationPrefs;
       const { data, error } = await supabase
         .from('profiles')
         .select('notification_prefs')

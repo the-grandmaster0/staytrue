@@ -77,7 +77,14 @@ export const Notifications: React.FC = () => {
 
   // Sync local state when DB prefs load
   React.useEffect(() => {
-    if (prefs && !localPrefs) setLocalPrefs(prefs as NotificationPrefs);
+    if (prefs && !localPrefs) {
+      setLocalPrefs({
+        daily_reminder: (prefs as NotificationPrefs).daily_reminder ?? true,
+        buddy_checkin:  (prefs as NotificationPrefs).buddy_checkin  ?? true,
+        messages:       (prefs as NotificationPrefs).messages       ?? true,
+        challenges:     (prefs as NotificationPrefs).challenges     ?? true,
+      });
+    }
   }, [prefs, localPrefs]);
 
   // Load reminder_time and timezone from profile
