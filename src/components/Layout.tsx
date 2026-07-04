@@ -192,6 +192,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <Bell className="h-[18px] w-[18px]" />
           </Link>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center justify-center w-10 h-10 border border-transparent text-app-text-secondary hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/5 transition-all cursor-pointer"
+            style={{ clipPath: hexClipSm }}
+            aria-label="Sign out"
+          >
+            <LogOut className="h-[18px] w-[18px]" />
+          </button>
         </div>
       </header>
 
