@@ -16,6 +16,7 @@ export interface Profile {
     daily_reminder: boolean;
     buddy_checkin: boolean;
     messages: boolean;
+    challenges: boolean;
   };
   last_seen_at: string | null;
   created_at: string;

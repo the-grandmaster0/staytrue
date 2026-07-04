@@ -80,6 +80,7 @@ export function usePushNotifications() {
         daily_reminder: true,
         buddy_checkin: true,
         messages: true,
+        challenges: true,
       }) as NotificationPrefs;
     },
     enabled: !!user,
