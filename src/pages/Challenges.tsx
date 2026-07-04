@@ -3,7 +3,6 @@ import { Swords, Trophy, Loader2, ShieldAlert } from 'lucide-react';
 import { useChallenges, useChallengesFeed } from '../hooks/useChallenges';
 import { ChallengeCard } from '../components/ChallengeCard';
 import { useAuthStore } from '../store/useAuthStore';
-import type { Challenge } from '../types/challenge';
 
 export const Challenges: React.FC = () => {
   const { user } = useAuthStore();
