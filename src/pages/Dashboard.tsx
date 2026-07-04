@@ -50,6 +50,8 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (urlTab && ['goals', 'buddies', 'profile'].includes(urlTab)) {
       setActiveTab(urlTab);
+    } else if (!urlTab) {
+      setActiveTab('goals');
     }
   }, [urlTab]);
 
