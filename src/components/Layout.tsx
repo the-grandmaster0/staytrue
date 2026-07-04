@@ -43,10 +43,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const bottomNavItems = [
     { label: 'Home',       path: '/dashboard',               icon: LayoutDashboard, badge: 0              },
-    { label: 'Buddy',      path: '/dashboard/find-buddy',    icon: Shuffle,         badge: 0              },
     { label: 'Buddies',    path: '/dashboard?tab=buddies',   icon: Users,           badge: 0              },
     { label: 'Messages',   path: '/dashboard/messages',      icon: MessageSquare,   badge: unreadCount    },
     { label: 'Challenges', path: '/dashboard/challenges',    icon: Swords,          badge: challengeBadge },
+    { label: 'Profile',    path: '/dashboard?tab=profile',   icon: UserIcon,        badge: 0              },
   ];
 
   const isActive = (path: string) => {
