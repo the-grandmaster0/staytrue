@@ -87,11 +87,12 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
           <span className="text-app-text-primary font-bold">{challenge.category}</span> showdown
           for <span className="text-app-text-primary font-bold">{challenge.duration_days} days</span>.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={() => respond.mutate({ challengeId: challenge.id, accept: true })}
             disabled={isProcessing}
-            className="btn-primary flex-1 flex items-center justify-center gap-1.5 py-2 text-xs cursor-pointer disabled:opacity-50"
+            style={{ minHeight: '44px' }}
+            className="btn-primary flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold cursor-pointer disabled:opacity-50"
           >
             {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             Accept
@@ -99,9 +100,10 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
           <button
             onClick={() => respond.mutate({ challengeId: challenge.id, accept: false })}
             disabled={isProcessing}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-50 rounded-none"
+            style={{ minHeight: '44px' }}
+            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-50 rounded-none"
           >
-            <XCircle className="h-3.5 w-3.5" />
+            <XCircle className="h-3.5 w-3.5 shrink-0" />
             Decline
           </button>
         </div>

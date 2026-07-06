@@ -28,10 +28,23 @@ export const Messages: React.FC = () => {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const location = useLocation();
+
   // Support deep-link from GoalBuddyPanel: navigate('/dashboard/messages', { state: { openBuddyId } })
   const [selectedBuddyId, setSelectedBuddyId] = useState<string | null>(
     (location.state as { openBuddyId?: string } | null)?.openBuddyId ?? null
   );
+  // Store the profile alongside the ID so BuddyChat always has it, even before conversations load
+  const [selectedBuddyProfile, setSelectedBuddyProfile] = useState<Profile | null>(null);
+
+  const selectBuddy = (id: string, profile: Profile) => {
+    setSelectedBuddyId(id);
+    setSelectedBuddyProfile(profile);
+  };
+
+  const deselectBuddy = () => {
+    setSelectedBuddyId(null);
+    setSelectedBuddyProfile(null);
+  };
 
   // Mark all messages as read when the user opens this page (clears nav badge)
   useEffect(() => {
@@ -150,9 +163,15 @@ export const Messages: React.FC = () => {
   const buddyIds = conversations.map((c) => c.buddy?.id).filter(Boolean) as string[];
   usePresenceFeed(buddyIds);
 
-  const selectedBuddy = selectedBuddyId
-    ? conversations.find((c) => c.buddy?.id === selectedBuddyId)?.buddy ?? null
-    : null;
+  // If we were deep-linked with an openBuddyId but have no profile yet, grab it from conversations once loaded
+  useEffect(() => {
+    if (selectedBuddyId && !selectedBuddyProfile && conversations.length > 0) {
+      const found = conversations.find((c) => c.buddy?.id === selectedBuddyId);
+      if (found?.buddy) setSelectedBuddyProfile(found.buddy);
+    }
+  }, [selectedBuddyId, selectedBuddyProfile, conversations]);
+
+  const displayName = selectedBuddyProfile?.full_name || selectedBuddyProfile?.email || 'Chat';
 
   return (
     <div className="space-y-6">
@@ -160,7 +179,7 @@ export const Messages: React.FC = () => {
       <div className="flex items-center gap-3">
         {selectedBuddyId && (
           <button
-            onClick={() => setSelectedBuddyId(null)}
+            onClick={deselectBuddy}
             className="flex items-center gap-1.5 text-sm text-app-text-secondary hover:text-app-text-body transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -168,9 +187,7 @@ export const Messages: React.FC = () => {
         )}
         <div>
           <h1 className="text-2xl font-bold text-app-text-body" style={{ fontFamily: 'var(--font-display)' }}>
-            {selectedBuddy
-              ? selectedBuddy.full_name || selectedBuddy.email || 'Chat'
-              : 'Messages'}
+            {selectedBuddyId ? displayName : 'Messages'}
           </h1>
           {!selectedBuddyId && (
             <p className="text-sm text-app-text-secondary mt-0.5">
@@ -181,8 +198,8 @@ export const Messages: React.FC = () => {
       </div>
 
       {/* Chat view */}
-      {selectedBuddyId && selectedBuddy ? (
-        <BuddyChat buddyId={selectedBuddyId} buddyProfile={selectedBuddy} />
+      {selectedBuddyId ? (
+        <BuddyChat buddyId={selectedBuddyId} buddyProfile={selectedBuddyProfile} />
       ) : isLoading ? (
         <div className="bg-app-panel border border-app-border rounded-xl divide-y divide-app-border overflow-hidden">
           {[1, 2, 3, 4].map((i) => <SkeletonMessageRow key={i} />)}
@@ -201,7 +218,7 @@ export const Messages: React.FC = () => {
             return (
               <button
                 key={buddy.id}
-                onClick={() => setSelectedBuddyId(buddy.id)}
+                onClick={() => selectBuddy(buddy.id, buddy)}
                 className="w-full flex items-center gap-4 px-5 py-4 hover:bg-app-bg transition-colors group text-left"
               >
                 {/* Unread indicator */}

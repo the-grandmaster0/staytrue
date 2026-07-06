@@ -5,6 +5,28 @@ import type { BuddyRequest, Buddy } from '../types/buddy';
 import type { Profile } from '../store/useAuthStore';
 import type { StreakData } from './useCheckins';
 
+// ─── Count of incoming pending buddy requests (for nav badge) ────
+export const useIncomingBuddyRequestCount = () => {
+  const { user } = useAuthStore();
+
+  return useQuery<number>({
+    queryKey: ['buddy-requests-count', user?.id],
+    queryFn: async () => {
+      if (!user) return 0;
+      const { count, error } = await supabase
+        .from('buddy_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('receiver_id', user.id)
+        .eq('status', 'pending');
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+};
+
 // ─── Search profiles by username OR email ────────────────────────
 export const useSearchProfiles = (query: string) => {
   const { user } = useAuthStore();
@@ -189,6 +211,7 @@ export const useRespondBuddyRequest = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['buddy-requests', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['buddy-requests-count', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['buddies', user?.id] });
     },
   });

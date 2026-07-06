@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { ThemeToggle } from './ThemeToggle';
 import { useUnreadMessageCount } from '../hooks/useMessages';
 import { usePendingChallenges } from '../hooks/useChallenges';
+import { useIncomingBuddyRequestCount } from '../hooks/useBuddies';
 import { OnlineBadge } from './OnlineBadge';
 import {
   LayoutDashboard,
@@ -27,6 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadMessageCount();
   const { data: pendingChallenges = [] } = usePendingChallenges();
+  const { data: incomingBuddyCount = 0 } = useIncomingBuddyRequestCount();
   const challengeBadge = pendingChallenges.length;
 
   const handleSignOut = async () => {
@@ -38,20 +40,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const sidebarNavItems = [
-    { label: 'Dashboard',     path: '/dashboard',                icon: LayoutDashboard, badge: 0              },
-    { label: 'Find a Buddy',  path: '/dashboard/find-buddy',     icon: Shuffle,         badge: 0              },
-    { label: 'Messages',      path: '/dashboard/messages',       icon: MessageSquare,   badge: unreadCount    },
-    { label: 'Challenges',    path: '/dashboard/challenges',     icon: Swords,          badge: challengeBadge },
-    { label: 'Notifications', path: '/dashboard/notifications',  icon: Bell,            badge: 0              },
-    { label: 'Profile',       path: '/dashboard/profile',        icon: UserIcon,        badge: 0              },
+    { label: 'Dashboard',     path: '/dashboard',                icon: LayoutDashboard, badge: 0                   },
+    { label: 'Find a Buddy',  path: '/dashboard/find-buddy',     icon: Shuffle,         badge: incomingBuddyCount  },
+    { label: 'Messages',      path: '/dashboard/messages',       icon: MessageSquare,   badge: unreadCount         },
+    { label: 'Challenges',    path: '/dashboard/challenges',     icon: Swords,          badge: challengeBadge      },
+    { label: 'Notifications', path: '/dashboard/notifications',  icon: Bell,            badge: 0                   },
+    { label: 'Profile',       path: '/dashboard/profile',        icon: UserIcon,        badge: 0                   },
   ];
 
   const bottomNavItems = [
-    { label: 'Home',       path: '/dashboard',               icon: LayoutDashboard, badge: 0              },
-    { label: 'Buddies',    path: '/dashboard?tab=buddies',   icon: Users,           badge: 0              },
-    { label: 'Messages',   path: '/dashboard/messages',      icon: MessageSquare,   badge: unreadCount    },
-    { label: 'Challenges', path: '/dashboard/challenges',    icon: Swords,          badge: challengeBadge },
-    { label: 'Profile',    path: '/dashboard/profile',       icon: UserIcon,        badge: 0              },
+    { label: 'Home',       path: '/dashboard',               icon: LayoutDashboard, badge: 0                  },
+    { label: 'Buddies',    path: '/dashboard?tab=buddies',   icon: Users,           badge: incomingBuddyCount },
+    { label: 'Messages',   path: '/dashboard/messages',      icon: MessageSquare,   badge: unreadCount        },
+    { label: 'Challenges', path: '/dashboard/challenges',    icon: Swords,          badge: challengeBadge     },
+    { label: 'Profile',    path: '/dashboard/profile',       icon: UserIcon,        badge: 0                  },
   ];
 
   const isActive = (path: string) => {
