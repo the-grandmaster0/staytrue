@@ -225,6 +225,18 @@ export const useRemoveBuddy = () => {
   return useMutation({
     mutationFn: async ({ buddyId }: { buddyId: string }) => {
       if (!user) throw new Error('Not authenticated');
+
+      // Delete all challenges between the two users first
+      const { error: challengeErr } = await supabase
+        .from('challenges')
+        .delete()
+        .or(
+          `and(challenger_id.eq.${user.id},opponent_id.eq.${buddyId}),` +
+          `and(challenger_id.eq.${buddyId},opponent_id.eq.${user.id})`
+        );
+      if (challengeErr) throw challengeErr;
+
+      // Then remove the buddy relationship
       const { error } = await supabase
         .from('buddy_requests')
         .delete()
@@ -249,6 +261,8 @@ export const useRemoveBuddy = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['buddies', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['buddy-requests', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['challenges'] });
+      queryClient.invalidateQueries({ queryKey: ['challenges-pending'] });
     },
   });
 };

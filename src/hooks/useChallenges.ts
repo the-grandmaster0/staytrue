@@ -129,6 +129,29 @@ export function useRespondChallenge() {
   });
 }
 
+// ─── Delete / cancel a challenge ──────────────────────────────────────────────
+// Works for: challenger cancelling pending, either party deleting completed/declined
+export function useDeleteChallenge() {
+  const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (challengeId: string) => {
+      if (!user) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('challenges')
+        .delete()
+        .eq('id', challengeId)
+        .or(`challenger_id.eq.${user.id},opponent_id.eq.${user.id}`);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: challengesKey() });
+      queryClient.invalidateQueries({ queryKey: ['challenges-pending'] });
+    },
+  });
+}
+
 // ─── Refresh scores for a challenge (call after check-in) ─────────────────────
 export function useRefreshChallengeScores() {
   const queryClient = useQueryClient();

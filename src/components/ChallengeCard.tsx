@@ -1,6 +1,6 @@
 import React from 'react';
-import { Swords, Trophy, Loader2, Clock, CheckCircle2, XCircle, Zap } from 'lucide-react';
-import { useRespondChallenge } from '../hooks/useChallenges';
+import { Swords, Trophy, Loader2, Clock, CheckCircle2, XCircle, Zap, Trash2 } from 'lucide-react';
+import { useRespondChallenge, useDeleteChallenge } from '../hooks/useChallenges';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Challenge } from '../types/challenge';
 
@@ -61,6 +61,7 @@ interface ChallengeCardProps {
 export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
   const { user } = useAuthStore();
   const respond = useRespondChallenge();
+  const deleteChal = useDeleteChallenge();
 
   const isChallenger = challenge.challenger_id === user?.id;
   const me    = isChallenger ? challenge.challenger : challenge.opponent;
@@ -71,7 +72,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
   const isWinning  = myScore >= theirScore;
 
   const opponentName = them?.full_name || them?.username || them?.email || 'Buddy';
-  const isProcessing = respond.isPending;
+  const isProcessing = respond.isPending || deleteChal.isPending;
 
   // ── Pending (incoming challenge — I'm the opponent) ──────────────────────
   if (challenge.status === 'pending' && !isChallenger) {
@@ -87,6 +88,11 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
           <span className="text-app-text-primary font-bold">{challenge.category}</span> showdown
           for <span className="text-app-text-primary font-bold">{challenge.duration_days} days</span>.
         </p>
+        {(respond.isError || deleteChal.isError) && (
+          <p className="text-xs text-red-400">
+            {((respond.error || deleteChal.error) as Error)?.message}
+          </p>
+        )}
         <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={() => respond.mutate({ challengeId: challenge.id, accept: true })}
@@ -94,16 +100,16 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
             style={{ minHeight: '44px' }}
             className="btn-primary flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold cursor-pointer disabled:opacity-50"
           >
-            {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            {respond.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             Accept
           </button>
           <button
-            onClick={() => respond.mutate({ challengeId: challenge.id, accept: false })}
+            onClick={() => deleteChal.mutate(challenge.id)}
             disabled={isProcessing}
             style={{ minHeight: '44px' }}
             className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-50 rounded-none"
           >
-            <XCircle className="h-3.5 w-3.5 shrink-0" />
+            {deleteChal.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
             Decline
           </button>
         </div>
@@ -114,7 +120,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
   // ── Pending (outgoing — I'm the challenger, waiting) ─────────────────────
   if (challenge.status === 'pending' && isChallenger) {
     return (
-      <div className="bg-app-panel border border-app-border rounded-none p-4 space-y-2 animate-fade-in opacity-70">
+      <div className="bg-app-panel border border-app-border rounded-none p-4 space-y-3 animate-fade-in opacity-80">
         <div className="flex items-center gap-2">
           <Swords className="h-4 w-4 text-app-text-dim shrink-0" />
           <p className="text-xs font-bold text-app-text-secondary uppercase tracking-widest">Challenge sent</p>
@@ -123,6 +129,15 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
           Waiting for <span className="font-semibold text-app-text-body">{opponentName}</span> to accept your{' '}
           <span className="text-app-text-primary">{challenge.category}</span> challenge.
         </p>
+        <button
+          onClick={() => deleteChal.mutate(challenge.id)}
+          disabled={isProcessing}
+          style={{ minHeight: '44px' }}
+          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-50 rounded-none"
+        >
+          {deleteChal.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+          Cancel challenge
+        </button>
       </div>
     );
   }
@@ -203,16 +218,34 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
             {challenge.duration_days}d challenge
           </span>
         </div>
+        <button
+          onClick={() => deleteChal.mutate(challenge.id)}
+          disabled={deleteChal.isPending}
+          style={{ minHeight: '44px' }}
+          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold border border-app-border text-app-text-secondary hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/5 transition-all cursor-pointer disabled:opacity-50 rounded-none"
+        >
+          {deleteChal.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 shrink-0" />}
+          Remove from history
+        </button>
       </div>
     );
   }
 
   // ── Declined ──────────────────────────────────────────────────────────────
   return (
-    <div className="bg-app-panel border border-app-border rounded-none p-4 opacity-50 animate-fade-in">
+    <div className="bg-app-panel border border-app-border rounded-none p-4 space-y-3 opacity-50 animate-fade-in">
       <p className="text-xs text-app-text-secondary">
         Challenge with <span className="text-app-text-body font-semibold">{opponentName}</span> was declined.
       </p>
+      <button
+        onClick={() => deleteChal.mutate(challenge.id)}
+        disabled={deleteChal.isPending}
+        style={{ minHeight: '44px' }}
+        className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold border border-app-border text-app-text-secondary hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/5 transition-all cursor-pointer disabled:opacity-50 rounded-none"
+      >
+        {deleteChal.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 shrink-0" />}
+        Dismiss
+      </button>
     </div>
   );
 };
