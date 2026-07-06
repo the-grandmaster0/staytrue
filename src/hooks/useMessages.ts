@@ -5,25 +5,23 @@ import { useAuthStore } from '../store/useAuthStore';
 import type { Message } from '../types/message';
 
 // ─── Query key helpers ────────────────────────────────────────────────────────
-export const messagesKey = (goalId: string) => ['messages', goalId] as const;
+export const messagesKey = (buddyId: string) => ['messages', buddyId] as const;
 export const unreadCountKey = () => ['messages-unread-count'] as const;
 
 // ─── Module-level channel registry ───────────────────────────────────────────
-// One channel per USER (not per goal) — filters by receiver_id globally.
-// This means one subscription handles all incoming messages for the user.
+// One channel per conversation (userId:buddyId pair).
 const channelRegistry = new Map<string, { channel: ReturnType<typeof supabase.channel>; refs: number }>();
 
-function getRegistryKey(userId: string, goalId: string) {
-  // Key per goal so each GoalChat instance has independent lifecycle
-  return `${userId}:${goalId}`;
+function getRegistryKey(userId: string, buddyId: string) {
+  return `${userId}:${buddyId}`;
 }
 
 function acquireChannel(
   userId: string,
-  goalId: string,
+  buddyId: string,
   onMessage: (msg: Message) => void,
 ) {
-  const key = getRegistryKey(userId, goalId);
+  const key = getRegistryKey(userId, buddyId);
   const existing = channelRegistry.get(key);
 
   if (existing) {
@@ -31,7 +29,7 @@ function acquireChannel(
     return key;
   }
 
-  const channelName = `msgs:${goalId}:${userId}:${Date.now()}`;
+  const channelName = `msgs:${userId}:${buddyId}:${Date.now()}`;
   const channel = supabase
     .channel(channelName)
     .on(
@@ -40,13 +38,14 @@ function acquireChannel(
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        // Filter by receiver_id so this user gets ALL messages sent to them
-        // regardless of which goal_id was used (fixes cross-goal stranger match)
         filter: `receiver_id=eq.${userId}`,
       },
       (payload) => {
         const newMsg = payload.new as Message;
-        onMessage(newMsg);
+        // Only handle messages from this specific buddy
+        if (newMsg.sender_id === buddyId) {
+          onMessage(newMsg);
+        }
       },
     )
     .subscribe();
@@ -65,75 +64,54 @@ function releaseChannel(key: string) {
   }
 }
 
-// ─── Fetch messages for a goal ────────────────────────────────────────────────
-export function useMessages(goalId: string) {
+// ─── Fetch messages between current user and a specific buddy ─────────────────
+export function useMessages(buddyId: string) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
   const query = useQuery<Message[]>({
-    queryKey: messagesKey(goalId),
+    queryKey: messagesKey(buddyId),
     queryFn: async () => {
-      if (!user || !goalId) return [];
+      if (!user || !buddyId) return [];
 
-      // First find the buddy for this goal — could be on either goal_id
-      // because stranger match creates buddy_requests on each user's own goal
-      const { data: buddyRows } = await supabase
-        .from('buddy_requests')
-        .select('sender_id, receiver_id')
-        .eq('status', 'accepted')
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .limit(10);
-
-      if (!buddyRows || buddyRows.length === 0) return [];
-
-      // Collect all buddy IDs
-      const buddyIds = buddyRows.map((r: any) =>
-        r.sender_id === user.id ? r.receiver_id : r.sender_id
-      );
-
-      // Fetch ALL messages between me and any of my buddies
-      // regardless of which goal_id the message was stored under
       const { data, error } = await supabase
         .from('messages')
         .select('*')
         .or(
-          buddyIds.map((bid: string) =>
-            `and(sender_id.eq.${user.id},receiver_id.eq.${bid}),and(sender_id.eq.${bid},receiver_id.eq.${user.id})`
-          ).join(',')
+          `and(sender_id.eq.${user.id},receiver_id.eq.${buddyId}),` +
+          `and(sender_id.eq.${buddyId},receiver_id.eq.${user.id})`
         )
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       return (data || []) as Message[];
     },
-    enabled: !!user && !!goalId,
+    enabled: !!user && !!buddyId,
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
-  // ── Realtime subscription via registry (safe against double-mount) ────────
+  // ── Realtime subscription ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!user?.id || !goalId) return;
+    if (!user?.id || !buddyId) return;
 
     const userId = user.id;
 
-    const key = acquireChannel(userId, goalId, (newMsg) => {
-      queryClient.setQueryData<Message[]>(messagesKey(goalId), (old = []) => {
+    const key = acquireChannel(userId, buddyId, (newMsg) => {
+      queryClient.setQueryData<Message[]>(messagesKey(buddyId), (old = []) => {
         if (old.some((m) => m.id === newMsg.id)) return old;
         return [...old, newMsg];
       });
-      if (newMsg.receiver_id === userId) {
-        queryClient.invalidateQueries({ queryKey: unreadCountKey() });
-      }
+      queryClient.invalidateQueries({ queryKey: unreadCountKey() });
     });
 
     return () => releaseChannel(key);
-  }, [user?.id, goalId, queryClient]);
+  }, [user?.id, buddyId, queryClient]);
 
   return query;
 }
 
-// ─── Total unread count across ALL goals (for nav badge) ─────────────────────
+// ─── Total unread count across ALL conversations (for nav badge) ──────────────
 export function useUnreadMessageCount() {
   const { user } = useAuthStore();
 
@@ -155,49 +133,45 @@ export function useUnreadMessageCount() {
   });
 }
 
-// ─── Mark all unread messages as read (for the current user) ─────────────────
-export function useMarkMessagesRead(goalId: string) {
+// ─── Mark messages from a specific buddy as read ──────────────────────────────
+export function useMarkMessagesRead(buddyId: string) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useCallback(async () => {
-    if (!user) return;
+    if (!user || !buddyId) return;
     const now = new Date().toISOString();
 
-    // Optimistically update the local cache for this goal's messages
-    queryClient.setQueryData<Message[]>(messagesKey(goalId), (old = []) =>
+    // Optimistically update the local cache
+    queryClient.setQueryData<Message[]>(messagesKey(buddyId), (old = []) =>
       old.map((m) =>
-        m.receiver_id === user.id && m.read_at === null ? { ...m, read_at: now } : m,
+        m.sender_id === buddyId && m.read_at === null ? { ...m, read_at: now } : m,
       ),
     );
 
-    // Mark ALL unread messages where this user is receiver — regardless of goal_id
-    // (fixes cross-goal stranger match where messages are stored under sender's goal)
+    // Mark messages from this buddy as read
     await supabase
       .from('messages')
       .update({ read_at: now })
       .eq('receiver_id', user.id)
+      .eq('sender_id', buddyId)
       .is('read_at', null);
 
-    // Clear the nav badge
-    queryClient.setQueryData(unreadCountKey(), 0);
     queryClient.invalidateQueries({ queryKey: unreadCountKey() });
-  }, [user, goalId, queryClient]);
+  }, [user, buddyId, queryClient]);
 }
 
-// ─── Send a message ───────────────────────────────────────────────────────────
-export function useSendMessage(goalId: string) {
+// ─── Send a message to a buddy ────────────────────────────────────────────────
+export function useSendMessage(buddyId: string) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
-      receiverId,
       content,
       messageType = 'text',
       reactionKey,
     }: {
-      receiverId: string;
       content: string;
       messageType?: 'text' | 'reaction';
       reactionKey?: string;
@@ -206,9 +180,9 @@ export function useSendMessage(goalId: string) {
       const { data, error } = await supabase
         .from('messages')
         .insert({
-          goal_id: goalId,
+          goal_id: null,
           sender_id: user.id,
-          receiver_id: receiverId,
+          receiver_id: buddyId,
           content,
           message_type: messageType,
           reaction_key: reactionKey ?? null,
@@ -219,7 +193,7 @@ export function useSendMessage(goalId: string) {
       return data as Message;
     },
     onSuccess: (newMsg) => {
-      queryClient.setQueryData<Message[]>(messagesKey(goalId), (old = []) => {
+      queryClient.setQueryData<Message[]>(messagesKey(buddyId), (old = []) => {
         if (old.some((m) => m.id === newMsg.id)) return old;
         return [...old, newMsg];
       });

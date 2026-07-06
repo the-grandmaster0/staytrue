@@ -40,7 +40,11 @@ export const Signup: React.FC = () => {
       const { data, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { data: { full_name: values.fullName, timezone: values.timezone } },
+        options: {
+          data: { full_name: values.fullName, timezone: values.timezone },
+          // Use the current origin so the link works in both local dev and production
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
       if (error) setErrorMsg(error.message);
       else if (data.user && data.session) navigate('/dashboard');

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Link, useParams, useLocation } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, ShieldAlert, Clock, Sparkles, MessageSquare, Users, BarChart2 } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldAlert, Clock, Sparkles, Users, BarChart2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Goal } from '../types/goal';
@@ -10,19 +10,13 @@ import { StreakCounter } from '../components/StreakCounter';
 import { CheckInButton } from '../components/CheckInButton';
 import { ContributionHeatmap } from '../components/ContributionHeatmap';
 import { BuddyManager } from '../components/BuddyManager';
-import { GoalChat } from '../components/GoalChat';
 import { useCheckins } from '../hooks/useCheckins';
-import { useMessages } from '../hooks/useMessages';
 
 export const GoalDetail: React.FC = () => {
   const { goalId } = useParams<{ goalId: string }>();
   const { user } = useAuthStore();
-  const location = useLocation();
   const [animateTrigger, setAnimateTrigger] = React.useState(0);
-
-  // Allow Messages page to deep-link to the messages tab
-  const initialTab = (location.state as any)?.tab ?? 'overview';
-  const [activeTab, setActiveTab] = React.useState<'overview' | 'buddies' | 'messages'>(initialTab);
+  const [activeTab, setActiveTab] = React.useState<'overview' | 'buddies'>('overview');
 
   const { data: goal, isLoading, error } = useQuery<Goal | null>({
     queryKey: ['goal', goalId],
@@ -38,8 +32,6 @@ export const GoalDetail: React.FC = () => {
   });
 
   const { data: checkins = [], isLoading: checkinsLoading } = useCheckins(goalId || '');
-  const { data: goalMessages = [] } = useMessages(goalId || '');
-  const unreadInGoal = goalMessages.filter((m) => m.receiver_id === user?.id && m.read_at === null).length;
 
   if (isLoading) {
     return (
@@ -118,8 +110,7 @@ export const GoalDetail: React.FC = () => {
         {[
           { id: 'overview', label: 'Overview', icon: BarChart2 },
           { id: 'buddies',  label: 'Buddies',  icon: Users },
-          { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadInGoal },
-        ].map(({ id, label, icon: Icon, badge }) => (
+        ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id as any)}
@@ -131,11 +122,6 @@ export const GoalDetail: React.FC = () => {
           >
             <Icon className="h-4 w-4" />
             {label}
-            {!!badge && badge > 0 && (
-              <span className="badge" style={{ fontSize: '9px', padding: '0 5px', lineHeight: '16px', height: '16px' }}>
-                {badge > 9 ? '9+' : badge}
-              </span>
-            )}
           </button>
         ))}
       </div>
@@ -173,8 +159,6 @@ export const GoalDetail: React.FC = () => {
           <BuddyManager goalId={goal.id} />
         </div>
       )}
-
-      {activeTab === 'messages' && <GoalChat goalId={goal.id} />}
     </div>
   );
 };

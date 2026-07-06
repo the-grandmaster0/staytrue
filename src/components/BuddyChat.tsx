@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { sanitize } from '../lib/sanitize';
 import { useMessages, useSendMessage, useMarkMessagesRead } from '../hooks/useMessages';
-import { useGoalBuddies } from '../hooks/useBuddies';
 import { useAuthStore } from '../store/useAuthStore';
 import { AvatarWithPresence, OnlineBadge } from './OnlineBadge';
 import { usePresenceFeed } from '../hooks/usePresence';
@@ -61,7 +60,7 @@ const MessageBubble: React.FC<BubbleProps> = ({ message, isMine, senderProfile }
       )}
 
       <div className={`flex flex-col gap-0.5 max-w-[72%] ${isMine ? 'items-end' : 'items-start'}`}>
-        {/* Sender name (only for buddy messages) */}
+        {/* Sender name */}
         {!isMine && (
           <span className="text-[9px] font-bold uppercase tracking-widest text-app-text-secondary px-1">
             {name}
@@ -139,51 +138,42 @@ const ReactionBar: React.FC<ReactionBarProps> = ({ onReact, disabled }) => (
   </div>
 );
 
-// ─── Main GoalChat component ──────────────────────────────────────────────────
-interface GoalChatProps {
-  goalId: string;
+// ─── Main BuddyChat component ─────────────────────────────────────────────────
+interface BuddyChatProps {
+  buddyId: string;
+  buddyProfile: Profile | null;
 }
 
-export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
+export const BuddyChat: React.FC<BuddyChatProps> = ({ buddyId, buddyProfile }) => {
   const { user } = useAuthStore();
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const { data: messages = [], isLoading, error } = useMessages(goalId);
-  const { data: buddies = [], isLoading: buddiesLoading } = useGoalBuddies(goalId);
-  const sendMessage = useSendMessage(goalId);
-  const markRead = useMarkMessagesRead(goalId);
+  const { data: messages = [], isLoading, error } = useMessages(buddyId);
+  const sendMessage = useSendMessage(buddyId);
+  const markRead = useMarkMessagesRead(buddyId);
 
   // Mark messages read when component mounts / messages load
   useEffect(() => {
     if (messages.length > 0) {
       markRead();
     }
-  }, [goalId, markRead]); // intentionally not on `messages` to avoid loop
+  }, [buddyId, markRead]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // Determine the buddy (first accepted buddy for this goal)
-  const buddy = buddies[0] ?? null;
-  const buddyProfile = buddy?.profile ?? null;
-
-  // Subscribe to realtime last_seen_at for the buddy
-  usePresenceFeed(buddy ? [buddy.buddy_id] : []);
-
-  // Build a profile map for rendering
-  const profileMap = new Map<string, Profile | null>();
-  if (user) profileMap.set(user.id, null); // we don't need our own profile for display
-  if (buddyProfile) profileMap.set(buddyProfile.id, buddyProfile);
+  // Subscribe to realtime presence for the buddy
+  usePresenceFeed([buddyId]);
 
   const charsLeft = MAX_CHARS - text.length;
-  const canSend = text.trim().length > 0 && text.length <= MAX_CHARS && !!buddy && !sendMessage.isPending;
+  const canSend = text.trim().length > 0 && text.length <= MAX_CHARS && !sendMessage.isPending;
 
   const handleSend = () => {
-    if (!canSend || !buddy) return;
+    if (!canSend) return;
     sendMessage.mutate(
       { content: sanitize(text.trim()).slice(0, 150), messageType: 'text' },
       { onSuccess: () => setText('') }
@@ -191,7 +181,6 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
   };
 
   const handleReact = (key: string, label: string) => {
-    if (!buddy) return;
     sendMessage.mutate({
       content: sanitize(label).slice(0, 150),
       messageType: 'reaction',
@@ -206,14 +195,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
     }
   };
 
-  // ── Loading buddies ─────────────────────────────────────────────────────────
-  if (buddiesLoading) {
-    return (
-      <div className="flex min-h-[200px] items-center justify-center border border-app-border rounded-xl bg-app-panel">
-        <Loader2 className="h-5 w-5 animate-spin text-app-text-primary" />
-      </div>
-    );
-  }
+  const name = buddyProfile?.full_name || buddyProfile?.email || 'Your buddy';
 
   // ── Error loading messages ───────────────────────────────────────────────────
   if (error) {
@@ -228,26 +210,13 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
     );
   }
 
-  // ── No buddy state (only show after data has loaded) ───────────────────────
-  if (!isLoading && !buddiesLoading && buddies.length === 0) {
-    return (
-      <div className="border border-app-border border-dashed bg-app-panel rounded-xl p-10 text-center">
-        <MessageSquare className="h-8 w-8 text-app-text-dim mx-auto mb-3" />
-        <p className="text-sm font-semibold text-app-text-secondary mb-1">No buddy linked yet</p>
-        <p className="text-xs text-app-text-dim">
-          Add an accountability buddy from the Buddies tab to unlock messaging
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-[520px] border border-app-border bg-app-panel rounded-xl overflow-hidden">
 
       {/* ── Chat header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border bg-app-bg shrink-0">
         <AvatarWithPresence
-          userId={buddy?.buddy_id}
+          userId={buddyId}
           size="md"
           className="h-8 w-8 rounded-full bg-app-accent-bg border border-app-border overflow-hidden"
         >
@@ -260,10 +229,8 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
           )}
         </AvatarWithPresence>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-app-text-body truncate">
-            {buddyProfile?.full_name || buddyProfile?.email || 'Your buddy'}
-          </p>
-          <OnlineBadge userId={buddy?.buddy_id} variant="pill" size="xs" />
+          <p className="text-sm font-semibold text-app-text-body truncate">{name}</p>
+          <OnlineBadge userId={buddyId} variant="pill" size="xs" />
         </div>
         <MessageSquare className="h-4 w-4 text-app-text-dim shrink-0" />
       </div>
@@ -295,7 +262,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
       {/* ── Reaction bar ─────────────────────────────────────────────────────── */}
       <div className="px-4 pt-2 pb-2 border-t border-app-border shrink-0 bg-app-bg">
         <p className="text-xs text-app-text-dim mb-2 font-medium">Quick reactions</p>
-        <ReactionBar onReact={handleReact} disabled={!buddy || sendMessage.isPending} />
+        <ReactionBar onReact={handleReact} disabled={sendMessage.isPending} />
       </div>
 
       {/* ── Text input ───────────────────────────────────────────────────────── */}
@@ -312,8 +279,8 @@ export const GoalChat: React.FC<GoalChatProps> = ({ goalId }) => {
               value={text}
               onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
               onKeyDown={handleKeyDown}
-              placeholder={buddy ? 'Write a message… (Enter to send)' : 'No buddy linked'}
-              disabled={!buddy || sendMessage.isPending}
+              placeholder="Write a message… (Enter to send)"
+              disabled={sendMessage.isPending}
               rows={2}
               aria-label="Message input"
               className="input-field w-full px-3 py-2 text-sm resize-none disabled:opacity-50"

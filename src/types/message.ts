@@ -2,7 +2,7 @@ export type MessageType = 'text' | 'reaction';
 
 export interface Message {
   id: string;
-  goal_id: string;
+  goal_id: string | null;
   sender_id: string;
   receiver_id: string;
   content: string;

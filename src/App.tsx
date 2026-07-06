@@ -18,6 +18,7 @@ import { Notifications } from './pages/Notifications';
 import { Challenges } from './pages/Challenges';
 import { EditProfile } from './pages/EditProfile';
 import { PublicProfile } from './pages/PublicProfile';
+import { AuthCallback } from './pages/AuthCallback';
 import { useAuthStore } from './store/useAuthStore';
 
 const queryClient = new QueryClient({
@@ -173,6 +174,9 @@ const AnimatedRoutes: React.FC = () => {
             </PageTransition>
           }
         />
+
+        {/* Email confirmation callback — Supabase redirects here after email link click */}
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
