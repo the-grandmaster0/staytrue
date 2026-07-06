@@ -191,25 +191,41 @@ export function useIsOnline(userId: string | null | undefined) {
  * Subscribes to postgres_changes on profiles for a stable list of user IDs.
  * Pushes updates directly into the React Query cache so useIsOnline reflects
  * changes instantly without a re-fetch.
+ *
+ * Uses a module-level registry so the same channel is never subscribed twice —
+ * multiple components watching the same set of users safely share one channel.
  */
+
+const feedRegistry = new Map<string, { channel: ReturnType<typeof supabase.channel>; refs: number }>();
+
 export function usePresenceFeed(userIds: string[]) {
   const queryClient = useQueryClient();
-  // Stable key — only re-subscribe if the actual set of IDs changes
   const idsKey = [...userIds].sort().join(',');
 
   useEffect(() => {
     if (!idsKey) return;
 
+    const existing = feedRegistry.get(idsKey);
+    if (existing) {
+      existing.refs += 1;
+      return () => {
+        existing.refs -= 1;
+        if (existing.refs <= 0) {
+          supabase.removeChannel(existing.channel);
+          feedRegistry.delete(idsKey);
+        }
+      };
+    }
+
     const channel = supabase
-      .channel(`presence-feed:${idsKey}`)
+      .channel(`presence-feed:${idsKey}:${Date.now()}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'profiles' },
         (payload) => {
           const row = payload.new as { id: string; last_seen_at: string | null };
-          // Push into cache for any ID we're watching, plus the watcher's own
-          // presence-profile entry (covers self-view edge cases)
-          if (userIds.includes(row.id)) {
+          const ids = idsKey.split(',');
+          if (ids.includes(row.id)) {
             queryClient.setQueryData(
               ['presence-profile', row.id],
               { last_seen_at: row.last_seen_at }
@@ -219,7 +235,17 @@ export function usePresenceFeed(userIds: string[]) {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    feedRegistry.set(idsKey, { channel, refs: 1 });
+
+    return () => {
+      const entry = feedRegistry.get(idsKey);
+      if (!entry) return;
+      entry.refs -= 1;
+      if (entry.refs <= 0) {
+        supabase.removeChannel(entry.channel);
+        feedRegistry.delete(idsKey);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey, queryClient]);
 }
