@@ -147,7 +147,7 @@ async function encryptPayload(
       name: 'HKDF',
       hash: 'SHA-256',
       salt: authSecret,
-      info: utf8('WebPush: info\x00').concat(userPublicKey, serverPubRaw),
+      info: concatArrays(utf8('WebPush: info\x00'), userPublicKey, serverPubRaw),
     } as any,
     sharedKey,
     256,
