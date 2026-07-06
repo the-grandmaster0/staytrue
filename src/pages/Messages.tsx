@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import {
   MessageSquare,
   ShieldAlert,
@@ -26,7 +27,11 @@ interface BuddyConversation {
 export const Messages: React.FC = () => {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const [selectedBuddyId, setSelectedBuddyId] = useState<string | null>(null);
+  const location = useLocation();
+  // Support deep-link from GoalBuddyPanel: navigate('/dashboard/messages', { state: { openBuddyId } })
+  const [selectedBuddyId, setSelectedBuddyId] = useState<string | null>(
+    (location.state as { openBuddyId?: string } | null)?.openBuddyId ?? null
+  );
 
   // Mark all messages as read when the user opens this page (clears nav badge)
   useEffect(() => {

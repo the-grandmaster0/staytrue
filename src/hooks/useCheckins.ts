@@ -113,3 +113,26 @@ export const useCheckIn = () => {
     },
   });
 };
+
+// ─── Undo today's check-in ────────────────────────────────────────
+export const useUndoCheckin = () => {
+  const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ goalId: _goalId, checkinId }: { goalId: string; checkinId: string }) => {
+      if (!user) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('checkins')
+        .delete()
+        .eq('id', checkinId)
+        .eq('user_id', user.id); // RLS safety: only delete own checkins
+      if (error) throw error;
+    },
+    onSuccess: (_data, { goalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['checkin-today', goalId] });
+      queryClient.invalidateQueries({ queryKey: ['checkins', goalId] });
+      queryClient.invalidateQueries({ queryKey: ['streak', goalId] });
+    },
+  });
+};

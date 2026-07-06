@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Check, Loader2, MessageSquarePlus } from 'lucide-react';
-import { useCheckIn, useTodayCheckin } from '../hooks/useCheckins';
+import { Check, Loader2, MessageSquarePlus, Undo2 } from 'lucide-react';
+import { useCheckIn, useTodayCheckin, useUndoCheckin } from '../hooks/useCheckins';
 import { useChallenges, useRefreshChallengeScores } from '../hooks/useChallenges';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -17,6 +17,7 @@ export const CheckInButton: React.FC<CheckInButtonProps> = ({
   const { user } = useAuthStore();
   const { data: todayCheckin, isLoading: isCheckingToday } = useTodayCheckin(goalId);
   const checkInMutation = useCheckIn();
+  const undoMutation = useUndoCheckin();
   const { data: challenges = [] } = useChallenges();
   const refreshScores = useRefreshChallengeScores();
   const [showNote, setShowNote] = useState(false);
@@ -43,12 +44,36 @@ export const CheckInButton: React.FC<CheckInButtonProps> = ({
     });
   };
 
+  const doUndo = () => {
+    if (!todayCheckin) return;
+    undoMutation.mutate({ goalId, checkinId: todayCheckin.id });
+  };
+
   if (alreadyCheckedIn) {
     return (
-      <button disabled className={`flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 text-green-400 cursor-not-allowed ${sizeClasses} font-medium`} style={{ minHeight: '44px' }}>
-        <Check className="h-3.5 w-3.5" />
-        Checked in today
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          disabled
+          className={`flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 text-green-400 cursor-not-allowed ${sizeClasses} font-medium`}
+          style={{ minHeight: '44px' }}
+        >
+          <Check className="h-3.5 w-3.5" />
+          Checked in today
+        </button>
+        {/* Undo button — visible everywhere */}
+        <button
+          onClick={doUndo}
+          disabled={undoMutation.isPending}
+          title="Undo check-in"
+          aria-label="Undo today's check-in"
+          className="flex items-center justify-center p-2 rounded-lg border border-app-border btn-ghost text-app-text-secondary hover:text-red-400 hover:border-red-400/30 hover:bg-red-500/5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ minHeight: '44px', minWidth: '44px' }}
+        >
+          {undoMutation.isPending
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <Undo2 className="h-3.5 w-3.5" />}
+        </button>
+      </div>
     );
   }
 

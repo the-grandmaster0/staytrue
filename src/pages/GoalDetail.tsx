@@ -9,7 +9,7 @@ import { CATEGORIES, FREQUENCIES } from '../components/CreateGoalModal';
 import { StreakCounter } from '../components/StreakCounter';
 import { CheckInButton } from '../components/CheckInButton';
 import { ContributionHeatmap } from '../components/ContributionHeatmap';
-import { BuddyManager } from '../components/BuddyManager';
+import { GoalBuddyPanel } from '../components/GoalBuddyPanel';
 import { useCheckins } from '../hooks/useCheckins';
 
 export const GoalDetail: React.FC = () => {
@@ -156,7 +156,7 @@ export const GoalDetail: React.FC = () => {
 
       {activeTab === 'buddies' && (
         <div className="bg-app-panel border border-app-border rounded-xl p-5">
-          <BuddyManager goalId={goal.id} />
+          <GoalBuddyPanel goalId={goal.id} />
         </div>
       )}
     </div>
