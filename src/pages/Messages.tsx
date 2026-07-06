@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuthStore } from '../store/useAuthStore';
 import { unreadCountKey } from '../hooks/useMessages';
 import { usePresenceFeed } from '../hooks/usePresence';
-import { AvatarWithPresence, OnlineBadge } from '../components/OnlineBadge';
+import { AvatarWithPresence } from '../components/OnlineBadge';
 import { SkeletonMessageRow } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';
 import { BuddyChat } from '../components/BuddyChat';
@@ -174,109 +174,138 @@ export const Messages: React.FC = () => {
   const displayName = selectedBuddyProfile?.full_name || selectedBuddyProfile?.email || 'Chat';
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        {selectedBuddyId && (
+    <div className="flex flex-col h-full">
+      {/* ── Desktop: two-panel layout; Mobile: single panel with back nav ── */}
+
+      {/* Mobile header — only shown when chat is open */}
+      {selectedBuddyId && (
+        <div className="flex items-center gap-3 mb-4 md:hidden">
           <button
             onClick={deselectBuddy}
             className="flex items-center gap-1.5 text-sm text-app-text-secondary hover:text-app-text-body transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-        )}
-        <div>
-          <h1 className="text-2xl font-bold text-app-text-body" style={{ fontFamily: 'var(--font-display)' }}>
-            {selectedBuddyId ? displayName : 'Messages'}
+          <h1 className="text-xl font-bold text-app-text-body" style={{ fontFamily: 'var(--font-display)' }}>
+            {displayName}
           </h1>
-          {!selectedBuddyId && (
-            <p className="text-sm text-app-text-secondary mt-0.5">
-              Conversations with your accountability buddies
-            </p>
+        </div>
+      )}
+
+      {/* Page title — hidden on mobile when chat is open */}
+      {!selectedBuddyId && (
+        <div className="mb-4 md:mb-6">
+          <h1 className="text-2xl font-bold text-app-text-body" style={{ fontFamily: 'var(--font-display)' }}>
+            Messages
+          </h1>
+          <p className="text-sm text-app-text-secondary mt-0.5">
+            Conversations with your accountability buddies
+          </p>
+        </div>
+      )}
+
+      {/* Desktop two-panel / Mobile single panel */}
+      <div className="flex gap-4 flex-1 min-h-0" style={{ height: 'calc(100vh - 180px)' }}>
+
+        {/* ── Left panel: conversation list ── */}
+        <div className={`
+          flex-col bg-app-panel border border-app-border rounded-xl overflow-hidden
+          ${selectedBuddyId ? 'hidden md:flex md:w-72 lg:w-80 shrink-0' : 'flex w-full md:w-72 lg:w-80 shrink-0'}
+        `}>
+          <div className="px-4 py-3 border-b border-app-border shrink-0">
+            <p className="text-xs font-bold uppercase tracking-widest text-app-text-secondary">Conversations</p>
+          </div>
+          <div className="flex-1 overflow-y-auto divide-y divide-app-border">
+            {isLoading ? (
+              [1, 2, 3, 4].map((i) => <SkeletonMessageRow key={i} />)
+            ) : error ? (
+              <div className="p-4 text-center">
+                <ShieldAlert className="h-6 w-6 text-red-400 mx-auto mb-2" />
+                <p className="text-xs text-red-400">{(error as Error).message}</p>
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="p-6">
+                <EmptyState variant="no-messages" />
+              </div>
+            ) : (
+              conversations.map(({ buddy, lastMessage, unreadCount }) => {
+                const name = buddy.full_name || buddy.username || buddy.email || 'Unknown';
+                const isSelected = selectedBuddyId === buddy.id;
+                return (
+                  <button
+                    key={buddy.id}
+                    onClick={() => selectBuddy(buddy.id, buddy)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-app-bg transition-colors text-left ${
+                      isSelected ? 'bg-app-accent-bg border-l-2 border-l-app-accent' : ''
+                    }`}
+                  >
+                    {/* Unread dot */}
+                    <div className="shrink-0 w-2 flex justify-center">
+                      {unreadCount > 0 && (
+                        <span className="h-2 w-2 rounded-full bg-app-accent block" />
+                      )}
+                    </div>
+
+                    <AvatarWithPresence
+                      userId={buddy.id}
+                      size="sm"
+                      className="h-9 w-9 rounded-full bg-app-accent-bg border border-app-border overflow-hidden flex items-center justify-center shrink-0"
+                    >
+                      {buddy.avatar_url ? (
+                        <img src={buddy.avatar_url} alt={name} className="h-9 w-9 object-cover rounded-full" />
+                      ) : (
+                        <MessageSquare className="h-4 w-4 text-app-text-primary" />
+                      )}
+                    </AvatarWithPresence>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className={`text-xs font-semibold truncate ${unreadCount > 0 ? 'text-app-text-body' : 'text-app-text-secondary'}`}>
+                          {name}
+                        </p>
+                        {lastMessage && (
+                          <span className="text-[10px] text-app-text-dim shrink-0">{formatTime(lastMessage.created_at)}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-1 mt-0.5">
+                        <p className={`text-[11px] truncate ${unreadCount > 0 ? 'text-app-text-secondary' : 'text-app-text-dim'}`}>
+                          {formatPreview(lastMessage)}
+                        </p>
+                        {unreadCount > 0 && (
+                          <span className="badge shrink-0" style={{ fontSize: '9px', padding: '1px 5px' }}>
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ── Right panel: chat or empty state ── */}
+        <div className={`
+          flex-1 min-w-0
+          ${selectedBuddyId ? 'flex' : 'hidden md:flex'}
+          flex-col
+        `}>
+          {selectedBuddyId ? (
+            <BuddyChat
+              buddyId={selectedBuddyId}
+              buddyProfile={selectedBuddyProfile}
+              onBack={deselectBuddy}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-app-panel border border-app-border rounded-xl text-center p-8">
+              <MessageSquare className="h-10 w-10 text-app-text-dim" />
+              <p className="text-sm font-semibold text-app-text-secondary">Select a conversation</p>
+              <p className="text-xs text-app-text-dim">Choose a buddy from the left to start chatting</p>
+            </div>
           )}
         </div>
       </div>
-
-      {/* Chat view */}
-      {selectedBuddyId ? (
-        <BuddyChat buddyId={selectedBuddyId} buddyProfile={selectedBuddyProfile} />
-      ) : isLoading ? (
-        <div className="bg-app-panel border border-app-border rounded-xl divide-y divide-app-border overflow-hidden">
-          {[1, 2, 3, 4].map((i) => <SkeletonMessageRow key={i} />)}
-        </div>
-      ) : error ? (
-        <div className="bg-app-panel border border-red-500/30 rounded-xl p-6 text-center max-w-lg mx-auto">
-          <ShieldAlert className="h-8 w-8 text-red-400 mx-auto mb-3" />
-          <p className="text-sm text-red-400">{(error as Error).message}</p>
-        </div>
-      ) : conversations.length === 0 ? (
-        <EmptyState variant="no-messages" />
-      ) : (
-        <div className="bg-app-panel border border-app-border rounded-xl divide-y divide-app-border overflow-hidden">
-          {conversations.map(({ buddy, lastMessage, unreadCount }) => {
-            const displayName = buddy.full_name || buddy.username || buddy.email || 'Unknown';
-            return (
-              <button
-                key={buddy.id}
-                onClick={() => selectBuddy(buddy.id, buddy)}
-                className="w-full flex items-center gap-4 px-5 py-4 hover:bg-app-bg transition-colors group text-left"
-              >
-                {/* Unread indicator */}
-                <div className="shrink-0 w-2.5 flex justify-center">
-                  {unreadCount > 0 && (
-                    <span className="h-2.5 w-2.5 rounded-full bg-app-accent block" />
-                  )}
-                </div>
-
-                {/* Avatar with presence dot */}
-                <AvatarWithPresence
-                  userId={buddy.id}
-                  size="sm"
-                  className="h-10 w-10 rounded-full bg-app-accent-bg border border-app-border overflow-hidden flex items-center justify-center"
-                >
-                  {buddy.avatar_url ? (
-                    <img
-                      src={buddy.avatar_url}
-                      alt={displayName}
-                      className="h-10 w-10 object-cover rounded-full"
-                    />
-                  ) : (
-                    <MessageSquare className="h-4 w-4 text-app-text-primary" />
-                  )}
-                </AvatarWithPresence>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className={`text-sm font-semibold truncate ${unreadCount > 0 ? 'text-app-text-body' : 'text-app-text-secondary'}`}>
-                      {displayName}
-                    </p>
-                    {buddy.username && (
-                      <span className="chip shrink-0">@{buddy.username}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className={`text-xs truncate ${unreadCount > 0 ? 'text-app-text-secondary font-medium' : 'text-app-text-dim'}`}>
-                      {formatPreview(lastMessage)}
-                    </p>
-                    <OnlineBadge userId={buddy.id} variant="icon" size="xs" className="shrink-0" />
-                  </div>
-                </div>
-
-                {/* Meta */}
-                <div className="shrink-0 flex flex-col items-end gap-1.5">
-                  {lastMessage && (
-                    <span className="text-xs text-app-text-dim">{formatTime(lastMessage.created_at)}</span>
-                  )}
-                  {unreadCount > 0 && (
-                    <span className="badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 };

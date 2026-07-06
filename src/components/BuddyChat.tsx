@@ -142,9 +142,10 @@ const ReactionBar: React.FC<ReactionBarProps> = ({ onReact, disabled }) => (
 interface BuddyChatProps {
   buddyId: string;
   buddyProfile: Profile | null;
+  onBack?: () => void;
 }
 
-export const BuddyChat: React.FC<BuddyChatProps> = ({ buddyId, buddyProfile }) => {
+export const BuddyChat: React.FC<BuddyChatProps> = ({ buddyId, buddyProfile, onBack }) => {
   const { user } = useAuthStore();
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -211,10 +212,19 @@ export const BuddyChat: React.FC<BuddyChatProps> = ({ buddyId, buddyProfile }) =
   }
 
   return (
-    <div className="flex flex-col h-[520px] border border-app-border bg-app-panel rounded-xl overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 border border-app-border bg-app-panel rounded-xl overflow-hidden">
 
       {/* ── Chat header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border bg-app-bg shrink-0">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="md:hidden flex items-center justify-center p-1 text-app-text-secondary hover:text-app-text-body transition-colors"
+            aria-label="Back to conversations"
+          >
+            <span className="text-lg leading-none">←</span>
+          </button>
+        )}
         <AvatarWithPresence
           userId={buddyId}
           size="md"
