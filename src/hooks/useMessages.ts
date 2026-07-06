@@ -142,14 +142,23 @@ export function useMarkMessagesRead(buddyId: string) {
     if (!user || !buddyId) return;
     const now = new Date().toISOString();
 
-    // Optimistically update the local cache
+    // Optimistically clear unread dot in the conversation list
+    queryClient.setQueryData<{ buddy: { id: string }; lastMessage: unknown; unreadCount: number }[]>(
+      ['messages-overview', user.id],
+      (old) => old?.map((c) => c.buddy.id === buddyId ? { ...c, unreadCount: 0 } : c)
+    );
+
+    // Optimistically update the message cache
     queryClient.setQueryData<Message[]>(messagesKey(buddyId), (old = []) =>
       old.map((m) =>
         m.sender_id === buddyId && m.read_at === null ? { ...m, read_at: now } : m,
       ),
     );
 
-    // Mark messages from this buddy as read
+    // Immediately zero out the nav badge in cache
+    queryClient.setQueryData(unreadCountKey(), (old: number = 0) => Math.max(0, old - 1));
+
+    // Persist to DB
     await supabase
       .from('messages')
       .update({ read_at: now })
@@ -157,7 +166,9 @@ export function useMarkMessagesRead(buddyId: string) {
       .eq('sender_id', buddyId)
       .is('read_at', null);
 
+    // Refetch authoritative counts
     queryClient.invalidateQueries({ queryKey: unreadCountKey() });
+    queryClient.invalidateQueries({ queryKey: ['messages-overview', user.id] });
   }, [user, buddyId, queryClient]);
 }
 

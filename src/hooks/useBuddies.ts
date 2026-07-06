@@ -22,8 +22,8 @@ export const useIncomingBuddyRequestCount = () => {
       return count ?? 0;
     },
     enabled: !!user,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 0,           // always refetch after invalidation
+    refetchInterval: 30_000, // poll every 30s as safety net
   });
 };
 
@@ -208,6 +208,17 @@ export const useRespondBuddyRequest = () => {
         .single();
       if (error) throw error;
       return data;
+    },
+    onMutate: async ({ requestId }) => {
+      // Optimistically remove from inbox list and decrement badge immediately
+      queryClient.setQueryData<{ id: string }[]>(
+        ['buddy-requests', user?.id, 'incoming'],
+        (old) => old?.filter((r) => r.id !== requestId)
+      );
+      queryClient.setQueryData<number>(
+        ['buddy-requests-count', user?.id],
+        (old = 0) => Math.max(0, old - 1)
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['buddy-requests', user?.id] });

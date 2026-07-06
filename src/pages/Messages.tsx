@@ -56,8 +56,14 @@ export const Messages: React.FC = () => {
         .update({ read_at: now })
         .eq('receiver_id', user.id)
         .is('read_at', null);
+      // Clear nav badge and all per-conversation unread counts immediately
       queryClient.setQueryData(unreadCountKey(), 0);
+      queryClient.setQueryData<{ buddy: { id: string }; lastMessage: unknown; unreadCount: number }[]>(
+        ['messages-overview', user.id],
+        (old) => old?.map((c) => ({ ...c, unreadCount: 0 }))
+      );
       queryClient.invalidateQueries({ queryKey: unreadCountKey() });
+      queryClient.invalidateQueries({ queryKey: ['messages-overview', user.id] });
     };
     markAllRead();
   }, [user, queryClient]);
