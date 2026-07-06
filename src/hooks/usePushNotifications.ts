@@ -105,14 +105,38 @@ export function usePushNotifications() {
 
   // ── Request permission + subscribe ────────────────────────────────────────
   const subscribe = useCallback(async (): Promise<boolean> => {
-    if (!isSupported || !swReg || !user) return false;
+    if (!isSupported || !user) return false;
 
     try {
+      // Ensure SW is registered before trying to subscribe
+      let reg = swReg;
+      if (!reg) {
+        reg = await registerServiceWorker();
+        if (!reg) {
+          console.error('[Push] No SW registration available');
+          return false;
+        }
+        setSwReg(reg);
+      }
+
+      // Wait for the SW to be active (important on first install)
+      if (reg.installing || reg.waiting) {
+        await new Promise<void>((resolve) => {
+          const sw = reg!.installing ?? reg!.waiting!;
+          sw.addEventListener('statechange', function handler() {
+            if (sw.state === 'activated') {
+              sw.removeEventListener('statechange', handler);
+              resolve();
+            }
+          });
+        });
+      }
+
       const result = await Notification.requestPermission();
       setPermission(result as PushPermission);
       if (result !== 'granted') return false;
 
-      const sub = await swReg.pushManager.subscribe({
+      const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
       });
@@ -121,7 +145,6 @@ export function usePushNotifications() {
       const p256dh = json.keys?.p256dh ?? '';
       const auth   = json.keys?.auth ?? '';
 
-      // Upsert into push_subscriptions
       const { error } = await supabase.from('push_subscriptions').upsert(
         {
           user_id:  user.id,

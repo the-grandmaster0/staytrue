@@ -1,8 +1,15 @@
 // public/sw.js — StayTrue Service Worker
 // Handles Web Push notifications and click actions.
+// NOTE: This file is the SOURCE for the injectManifest strategy.
+// VitePWA will inject the precache manifest at build time.
 
-self.addEventListener('install', (event) => {
-  // Activate immediately without waiting for old workers to die
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+
+// Injected by VitePWA at build time — DO NOT remove this line
+precacheAndRoute(self.__WB_MANIFEST);
+cleanupOutdatedCaches();
+
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
@@ -54,14 +61,12 @@ self.addEventListener('notificationclick', (event) => {
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clients) => {
-        // Focus existing window if already open
         for (const client of clients) {
           const clientUrl = new URL(client.url);
           if (clientUrl.pathname === targetUrl && 'focus' in client) {
             return client.focus();
           }
         }
-        // Open a new window otherwise
         if (self.clients.openWindow) {
           return self.clients.openWindow(targetUrl);
         }
