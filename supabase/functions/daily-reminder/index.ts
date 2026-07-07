@@ -10,19 +10,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// ── Simple in-memory rate limiter (prevent abuse) ────────────────────────────
-const rateLimitCache = new Map<string, number>();
+// ── Get current hour + minute in a given IANA timezone ───────────────────────
+// Uses Intl.DateTimeFormat parts — reliable in Deno and avoids Date parsing bugs.
+function getCurrentTimeInZone(timezone: string): { hour: number; minute: number } | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false, // 0-23
+    }).formatToParts(new Date());
 
-function checkRateLimit(key: string, maxRequests = 1, windowMs = 60_000): boolean {
-  const now = Date.now();
-  const lastRun = rateLimitCache.get(key) || 0;
+    const hourPart   = parts.find((p) => p.type === 'hour')?.value;
+    const minutePart = parts.find((p) => p.type === 'minute')?.value;
 
-  if (now - lastRun < windowMs) {
-    return false; // too soon
+    if (!hourPart || !minutePart) return null;
+
+    let hour = parseInt(hourPart, 10);
+    const minute = parseInt(minutePart, 10);
+
+    // Some runtimes return 24 for midnight — normalise to 0
+    if (hour === 24) hour = 0;
+
+    return { hour, minute };
+  } catch {
+    return null;
   }
-
-  rateLimitCache.set(key, now);
-  return true;
 }
 
 Deno.serve(async (req: Request) => {
@@ -30,31 +43,19 @@ Deno.serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Rate limit: once per minute globally (cron should call once per day anyway)
-  if (!checkRateLimit('daily-reminder', 1, 60_000)) {
-    return new Response(
-      JSON.stringify({ error: 'Rate limit exceeded. This function should be called once per day by pg_cron.' }),
-      { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
-
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase    = createClient(supabaseUrl, serviceKey);
 
-    // Current UTC time
-    const now = new Date();
-    const currentHour = now.getUTCHours();
-    const currentMinute = now.getUTCMinutes();
-    const today = now.toISOString().slice(0, 10);
+    const now   = new Date();
+    // today's date in UTC — used for checkin range query
+    const todayStart = new Date(now);
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayEnd = new Date(now);
+    todayEnd.setUTCHours(23, 59, 59, 999);
 
-    // Find users whose reminder_time (in their timezone) matches current UTC hour
-    // We need to convert user's local time to UTC using their timezone
+    // Fetch all users who have a push subscription
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
       .select(`
@@ -63,76 +64,63 @@ Deno.serve(async (req: Request) => {
         reminder_time,
         notification_prefs,
         push_subscriptions!inner ( id )
-      `)
-      .not('push_subscriptions.id', 'is', null);
+      `);
 
     if (profilesError) throw profilesError;
 
     const usersToCheck: string[] = [];
 
-    // Filter users whose reminder time is NOW (accounting for timezone conversion)
     for (const profile of (profiles ?? []) as any[]) {
       const prefs = profile.notification_prefs ?? {};
       if (prefs.daily_reminder === false) continue;
       if (!profile.reminder_time || !profile.timezone) continue;
 
-      try {
-        // Parse reminder_time (HH:MM format)
-        const [reminderHour, reminderMinute] = profile.reminder_time.split(':').map(Number);
-        
-        // Create a date in user's timezone at their reminder time
-        const userLocalTime = new Date().toLocaleString('en-US', {
-          timeZone: profile.timezone,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        });
-        
-        // Get current time in user's timezone
-        const userNow = new Date(userLocalTime);
-        const userHour = userNow.getHours();
-        const userMinute = userNow.getMinutes();
+      // Parse stored reminder_time — stored as "HH:MM" in 24h format
+      const [reminderHour, reminderMinute] = profile.reminder_time.split(':').map(Number);
+      if (isNaN(reminderHour) || isNaN(reminderMinute)) continue;
 
-        // Check if it's the user's reminder hour (±15 min window to avoid missing)
-        if (userHour === reminderHour && Math.abs(userMinute - reminderMinute) <= 15) {
-          usersToCheck.push(profile.id);
-        }
-      } catch (err) {
-        console.error(`[daily-reminder] Failed to parse timezone for user ${profile.id}:`, err);
+      // Get current time in user's timezone using reliable Intl API
+      const userTime = getCurrentTimeInZone(profile.timezone);
+      if (!userTime) continue;
+
+      // Match within a ±15 minute window to absorb cron jitter
+      const matchesHour = userTime.hour === reminderHour;
+      const minuteDiff  = Math.abs(userTime.minute - reminderMinute);
+      if (matchesHour && minuteDiff <= 15) {
+        usersToCheck.push(profile.id);
       }
     }
 
     if (usersToCheck.length === 0) {
+      const { hour } = getCurrentTimeInZone('UTC') ?? { hour: now.getUTCHours() };
       return new Response(
-        JSON.stringify({ message: 'No users scheduled for this hour', hour: currentHour }),
+        JSON.stringify({ message: 'No users scheduled for this time', utcHour: hour }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
     // Find active goals for these users
-    const { data: goals, error } = await supabase
+    const { data: goals, error: goalsError } = await supabase
       .from('goals')
       .select('id, title, user_id')
       .in('user_id', usersToCheck)
       .eq('status', 'active');
 
-    if (error) throw error;
+    if (goalsError) throw goalsError;
 
-    // Get today's check-ins
+    // Get today's check-ins using the timestamp column (checked_in_at), not checkin_date
     const { data: todayCheckins } = await supabase
       .from('checkins')
       .select('user_id, goal_id')
-      .eq('checkin_date', today)
-      .in('user_id', usersToCheck);
+      .in('user_id', usersToCheck)
+      .gte('checked_in_at', todayStart.toISOString())
+      .lte('checked_in_at', todayEnd.toISOString());
 
     const checkedInSet = new Set(
       (todayCheckins ?? []).map((c: any) => `${c.user_id}:${c.goal_id}`)
     );
 
-    // Collect users who have NOT checked in on any goal today
+    // Collect users who have NOT checked in on any active goal today
     const toNotify = new Map<string, string>();
 
     for (const goal of (goals ?? []) as any[]) {
@@ -164,11 +152,10 @@ Deno.serve(async (req: Request) => {
     );
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         checked: usersToCheck.length,
-        sent: toNotify.size, 
-        hour: currentHour,
-        results 
+        sent: toNotify.size,
+        results,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

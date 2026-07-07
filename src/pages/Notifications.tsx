@@ -318,6 +318,8 @@ export const Notifications: React.FC = () => {
               checked={currentPrefs.buddy_checkin}
               onChange={(v) => handlePrefChange('buddy_checkin', v)}
               disabled={!isSubscribed}
+              // Note: buddy request alerts share the buddy_checkin preference key
+              // since the NotificationPrefs schema does not have a separate field for them.
             />
             <PrefRow
               icon={<Swords className="h-4 w-4 text-amber-400" />}

@@ -148,6 +148,12 @@ export function useMarkMessagesRead(buddyId: string) {
       (old) => old?.map((c) => c.buddy.id === buddyId ? { ...c, unreadCount: 0 } : c)
     );
 
+    // Snapshot unread count from this buddy BEFORE the optimistic update marks them read
+    const cachedMessages = queryClient.getQueryData<Message[]>(messagesKey(buddyId)) ?? [];
+    const unreadFromBuddy = cachedMessages.filter(
+      (m) => m.sender_id === buddyId && m.read_at === null,
+    ).length;
+
     // Optimistically update the message cache
     queryClient.setQueryData<Message[]>(messagesKey(buddyId), (old = []) =>
       old.map((m) =>
@@ -155,8 +161,10 @@ export function useMarkMessagesRead(buddyId: string) {
       ),
     );
 
-    // Immediately zero out the nav badge in cache
-    queryClient.setQueryData(unreadCountKey(), (old: number = 0) => Math.max(0, old - 1));
+    // Subtract the exact count from the nav badge
+    queryClient.setQueryData(unreadCountKey(), (old: number = 0) =>
+      Math.max(0, old - unreadFromBuddy),
+    );
 
     // Persist to DB
     await supabase

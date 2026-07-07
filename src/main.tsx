@@ -8,17 +8,27 @@ import { validateEnv } from './lib/env.ts';
 validateEnv();
 
 // ── Global fix: prevent focus ring flash when clicking buttons/links ─────────
-// Prevents browser from moving focus on mousedown (which causes the
-// brief outline flash on the previously-focused element).
-// onClick still fires normally — only the focus-on-mousedown is suppressed.
+// Suppresses the focus-on-mousedown behaviour that causes a brief outline flash
+// on the previously-focused element. Scoped to only buttons and links — never
+// inputs, selects, textareas or checkboxes, where preventDefault would break
+// native browser behaviour (text cursor placement, checkbox toggle, etc.).
 document.addEventListener('mousedown', (e) => {
   const target = e.target as HTMLElement;
+  const tag = target.tagName;
+
+  // Never interfere with form controls or editable content
   if (
-    target.tagName === 'BUTTON' ||
-    target.tagName === 'A' ||
-    target.closest('button') ||
-    target.closest('a')
-  ) {
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    tag === 'OPTION' ||
+    (target as HTMLElement).isContentEditable
+  ) return;
+
+  // Only suppress on buttons and anchor links (and their icon children)
+  const btn = target.closest('button');
+  const anchor = target.closest('a');
+  if (btn || anchor || tag === 'BUTTON' || tag === 'A') {
     e.preventDefault();
   }
 }, { capture: false });

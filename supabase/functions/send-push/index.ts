@@ -93,7 +93,7 @@ async function buildVapidJwt(
   const sigBuf = await crypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' },
     cryptoKey,
-    signingInput,
+    signingInput.buffer as ArrayBuffer,
   );
 
   return `${headerB64}.${payloadB64}.${bytesToBase64url(new Uint8Array(sigBuf))}`;
@@ -125,7 +125,7 @@ async function encryptPayload(
   // Import subscriber's public key
   const subscriberKey = await crypto.subtle.importKey(
     'raw',
-    userPublicKey,
+    userPublicKey.buffer as ArrayBuffer,
     { name: 'ECDH', namedCurve: 'P-256' },
     false,
     [],
@@ -198,11 +198,6 @@ async function encryptPayload(
 }
 
 // ── Uint8Array concat helper ──────────────────────────────────────────────────
-declare global {
-  interface Uint8ArrayConstructor {
-    prototype: Uint8Array;
-  }
-}
 function concatArrays(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((n, a) => n + a.length, 0);
   const out = new Uint8Array(total);
@@ -287,10 +282,23 @@ Deno.serve(async (req: Request) => {
     const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!;
     const VAPID_SUBJECT     = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:admin@staytrue.app';
 
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+      console.error('[send-push] VAPID secrets missing — check Supabase secrets');
+      return new Response(
+        JSON.stringify({ error: 'VAPID secrets not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Public key must be 87 chars (uncompressed EC P-256 in base64url = 65 bytes)
+    if (VAPID_PUBLIC_KEY.length < 80) {
+      console.error('[send-push] VAPID_PUBLIC_KEY looks wrong — expected ~87 chars, got', VAPID_PUBLIC_KEY.length);
+    }
+
     const payloadStr = JSON.stringify({ title, body, url: url ?? '/' });
 
     const results = await Promise.allSettled(
-      subs.map(async (sub) => {
+      subs.map(async (sub: { endpoint: string; p256dh: string; auth: string }) => {
         // Derive push service audience (origin only)
         const endpointOrigin = new URL(sub.endpoint).origin;
 
@@ -313,7 +321,8 @@ Deno.serve(async (req: Request) => {
             'TTL': '86400',
             'Authorization': `vapid t=${jwt},k=${VAPID_PUBLIC_KEY}`,
           },
-          body: bodyBytes,
+          // Use .buffer to satisfy BodyInit — Deno and modern browsers accept ArrayBuffer
+          body: bodyBytes.buffer as ArrayBuffer,
         });
 
         if (resp.status === 410 || resp.status === 404) {

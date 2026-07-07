@@ -109,7 +109,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <p className="section-label px-3 mb-3">// NAVIGATION</p>
         {sidebarNavItems.map((item) => {
           const Icon = item.icon;
-          const active = location.pathname === item.path;
+          // Dashboard item should also be active on sub-pages like /dashboard/goals/:id
+          const active = item.path === '/dashboard'
+            ? location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/goals/')
+            : location.pathname === item.path;
           return (
             <Link key={item.label} to={item.path} className={`nav-link ${active ? 'active' : ''}`}>
               <Icon className="h-4 w-4 shrink-0" />

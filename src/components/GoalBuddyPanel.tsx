@@ -170,7 +170,16 @@ export const GoalBuddyPanel: React.FC<GoalBuddyPanelProps> = ({ goalId }) => {
           {[1, 2].map((i) => <SkeletonBuddyCard key={i} />)}
         </div>
       ) : buddies.length === 0 ? (
-        <EmptyState variant="no-buddies" compact />
+        <div>
+          <EmptyState variant="no-buddies" compact />
+          <p className="text-xs text-app-text-dim text-center pt-2">
+            Add buddies from the{' '}
+            <a href="/dashboard/find-buddy" className="text-app-text-primary underline underline-offset-2">
+              Find Buddy
+            </a>{' '}
+            page.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           {buddies.map((buddy) => (
@@ -183,17 +192,6 @@ export const GoalBuddyPanel: React.FC<GoalBuddyPanelProps> = ({ goalId }) => {
             />
           ))}
         </div>
-      )}
-
-      {/* Hint to find buddies */}
-      {!isLoading && buddies.length === 0 && (
-        <p className="text-xs text-app-text-dim text-center pt-1">
-          Add buddies from the{' '}
-          <a href="/dashboard/find-buddy" className="text-app-text-primary underline underline-offset-2">
-            Find Buddy
-          </a>{' '}
-          page.
-        </p>
       )}
     </div>
   );

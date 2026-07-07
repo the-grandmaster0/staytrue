@@ -82,8 +82,11 @@ export const CreateGoalModal: React.FC<CreateGoalModalProps> = ({ isOpen, onClos
     },
     onMutate: async (newGoalData) => {
       await queryClient.cancelQueries({ queryKey: ['goals', user?.id] });
-      const prev = queryClient.getQueryData(['goals', user?.id]);
+      // Snapshot all matching caches before the optimistic update
+      const prev = queryClient.getQueriesData({ queryKey: ['goals', user?.id] });
       const optimistic = { id: crypto.randomUUID(), ...newGoalData, status: 'active', created_at: new Date().toISOString() };
+      // Prepend the optimistic item into every cached goals page so the user
+      // sees it immediately regardless of which filter/page they're on.
       queryClient.setQueriesData({ queryKey: ['goals', user?.id] }, (old: any) => {
         if (!old) return { data: [optimistic], count: 1 };
         if (old.data) return { ...old, data: [optimistic, ...old.data].slice(0, 10), count: (old.count || 0) + 1 };
@@ -92,7 +95,12 @@ export const CreateGoalModal: React.FC<CreateGoalModalProps> = ({ isOpen, onClos
       return { prev };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['goals', user?.id], ctx.prev);
+      // Restore every cache we touched
+      if (ctx?.prev) {
+        for (const [key, data] of ctx.prev) {
+          queryClient.setQueryData(key, data);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals', user?.id] });

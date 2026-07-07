@@ -8,11 +8,14 @@ import type { Challenge } from '../types/challenge';
 const ScoreBar: React.FC<{
   myScore: number;
   theirScore: number;
-  total: number;
   isWinning: boolean;
-}> = ({ myScore, theirScore, total, isWinning }) => {
-  const myPct   = total > 0 ? Math.round((myScore   / total) * 100) : 50;
-  const theirPct = total > 0 ? Math.round((theirScore / total) * 100) : 50;
+}> = ({ myScore, theirScore, isWinning }) => {
+  // Use the sum of both scores as the denominator so the two bars always add
+  // up to 100% and never overflow the container. Fall back to 50/50 when
+  // neither player has scored yet.
+  const combined = myScore + theirScore;
+  const myPct    = combined > 0 ? Math.round((myScore    / combined) * 100) : 50;
+  const theirPct = combined > 0 ? 100 - myPct                               : 50;
 
   return (
     <div className="space-y-1.5">
@@ -68,7 +71,6 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
   const them  = isChallenger ? challenge.opponent   : challenge.challenger;
   const myScore    = isChallenger ? challenge.challenger_score : challenge.opponent_score;
   const theirScore = isChallenger ? challenge.opponent_score   : challenge.challenger_score;
-  const total = challenge.duration_days;
   const isWinning  = myScore >= theirScore;
 
   const opponentName = them?.full_name || them?.username || them?.email || 'Buddy';
@@ -104,12 +106,12 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
             Accept
           </button>
           <button
-            onClick={() => deleteChal.mutate(challenge.id)}
+            onClick={() => respond.mutate({ challengeId: challenge.id, accept: false })}
             disabled={isProcessing}
             style={{ minHeight: '44px' }}
             className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-50 rounded-none"
           >
-            {deleteChal.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+            {respond.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
             Decline
           </button>
         </div>
@@ -173,7 +175,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge }) => {
         </div>
 
         {/* Bar */}
-        <ScoreBar myScore={myScore} theirScore={theirScore} total={total} isWinning={isWinning} />
+        <ScoreBar myScore={myScore} theirScore={theirScore} isWinning={isWinning} />
 
         {/* Status line */}
         <p className="text-[10px] text-app-text-dim uppercase tracking-wider text-center">

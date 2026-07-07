@@ -278,6 +278,9 @@ export const useRemoveBuddy = () => {
   });
 };
 
-// ─── Legacy aliases (keeps BuddyRequestsInbox working without changes) ───
+// ─── Legacy aliases ───────────────────────────────────────────────
+// useBuddyRequestsForGoal previously returned outgoing requests scoped to a
+// goal — goals are no longer the scope unit, so this now returns all incoming
+// requests (the correct semantic for an inbox-style component).
 export const useBuddyRequestsForGoal = (_goalId: string) =>
-  useBuddyRequests('outgoing');
+  useBuddyRequests('incoming');

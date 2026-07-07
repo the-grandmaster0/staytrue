@@ -46,12 +46,13 @@ export const Dashboard: React.FC = () => {
   const [page, setPage] = useState(1);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Sync tab when URL param changes (e.g. bottom nav deep-link)
+  // Sync tab when URL param changes (e.g. bottom nav deep-link).
+  // Only update when urlTab actually carries a value — if the param is absent
+  // (urlTab === null) we leave whatever tab the user manually selected alone,
+  // rather than resetting back to 'goals' on every re-render.
   useEffect(() => {
     if (urlTab && ['goals', 'buddies', 'profile'].includes(urlTab)) {
       setActiveTab(urlTab);
-    } else if (!urlTab) {
-      setActiveTab('goals');
     }
   }, [urlTab]);
 

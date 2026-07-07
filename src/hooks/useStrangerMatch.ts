@@ -48,24 +48,44 @@ export function useStrangerMatch(goalId: string) {
             const updated = payload.new as MatchingPoolEntry;
             if (!updated.is_matched) return;
 
-            // Fetch the buddy profile from the newly created buddy_request
-            const { data: reqData } = await supabase
-              .from('buddy_requests')
-              .select('sender_id, receiver_id, sender:sender_id(*), receiver:receiver_id(*)')
-              .eq('status', 'accepted')
-              .or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`)
-              .limit(1)
-              .single();
+            // Use matched_with_user_id from the pool row — set directly by the
+            // match_buddy DB function — so we never accidentally fetch an older
+            // existing buddy relationship instead of the newly matched one.
+            const matchedUserId = updated.matched_with_user_id;
 
-            if (reqData) {
-              const buddy = (
-                (reqData as any).sender_id === user?.id
-                  ? (reqData as any).receiver
-                  : (reqData as any).sender
-              ) as Profile;
+            if (!matchedUserId) {
+              // Fallback: pool row doesn't carry the matched ID (older schema),
+              // fetch the most recently created accepted request as a best-effort.
+              const { data: reqData } = await supabase
+                .from('buddy_requests')
+                .select('sender_id, receiver_id, sender:sender_id(*), receiver:receiver_id(*)')
+                .eq('status', 'accepted')
+                .or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
 
-              setMatchState({ status: 'matched', buddy });
-              invalidateBuddyQueries(queryClient, poolGoalId);
+              if (reqData) {
+                const buddy = (
+                  (reqData as any).sender_id === user?.id
+                    ? (reqData as any).receiver
+                    : (reqData as any).sender
+                ) as Profile;
+                setMatchState({ status: 'matched', buddy });
+                invalidateBuddyQueries(queryClient, poolGoalId);
+              }
+            } else {
+              // Happy path: fetch the exact matched user's profile directly.
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', matchedUserId)
+                .single();
+
+              if (profileData) {
+                setMatchState({ status: 'matched', buddy: profileData as Profile });
+                invalidateBuddyQueries(queryClient, poolGoalId);
+              }
             }
 
             supabase.removeChannel(channel);

@@ -46,27 +46,17 @@ export const Messages: React.FC = () => {
     setSelectedBuddyProfile(null);
   };
 
-  // Mark all messages as read when the user opens this page (clears nav badge)
+  // Clear the nav badge when the messages page is first opened, but only if no
+  // specific conversation is open yet (the per-conversation BuddyChat handles
+  // marking individual threads read). This avoids bulk-clearing unread state
+  // before the user has actually seen any messages.
   useEffect(() => {
-    if (!user) return;
-    const markAllRead = async () => {
-      const now = new Date().toISOString();
-      await supabase
-        .from('messages')
-        .update({ read_at: now })
-        .eq('receiver_id', user.id)
-        .is('read_at', null);
-      // Clear nav badge and all per-conversation unread counts immediately
-      queryClient.setQueryData(unreadCountKey(), 0);
-      queryClient.setQueryData<{ buddy: { id: string }; lastMessage: unknown; unreadCount: number }[]>(
-        ['messages-overview', user.id],
-        (old) => old?.map((c) => ({ ...c, unreadCount: 0 }))
-      );
-      queryClient.invalidateQueries({ queryKey: unreadCountKey() });
-      queryClient.invalidateQueries({ queryKey: ['messages-overview', user.id] });
-    };
-    markAllRead();
-  }, [user, queryClient]);
+    if (!user || selectedBuddyId) return;
+    // Only zero out the badge display — don't write read_at to the DB here.
+    // Individual conversations mark their own messages read via useMarkMessagesRead.
+    queryClient.invalidateQueries({ queryKey: unreadCountKey() });
+    queryClient.invalidateQueries({ queryKey: ['messages-overview', user.id] });
+  }, [user, queryClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch all buddy conversations
   const { data: conversations = [], isLoading, error } = useQuery<BuddyConversation[]>({

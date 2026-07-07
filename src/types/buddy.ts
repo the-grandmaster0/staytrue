@@ -7,6 +7,8 @@ export interface MatchingPoolEntry {
   category: string;
   joined_at: string;
   is_matched: boolean;
+  /** Set by the match_buddy DB function when a match is made */
+  matched_with_user_id: string | null;
 }
 
 export interface MatchBuddyResult {

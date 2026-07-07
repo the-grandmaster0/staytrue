@@ -18,7 +18,19 @@ export interface StreakData {
 }
 
 // ─── Today's check-ins for a goal ────────────────────────────────
-const todayUTC = () => new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+/**
+ * Returns today's date string (YYYY-MM-DD) in the user's local timezone.
+ * Using local time avoids the bug where a check-in at e.g. 10pm UTC-5
+ * (= tomorrow UTC) would be invisible to useTodayCheckin, letting the user
+ * check in again on the same local day.
+ */
+const todayLocal = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 export const useTodayCheckin = (goalId: string) => {
   const { user } = useAuthStore();
@@ -26,14 +38,17 @@ export const useTodayCheckin = (goalId: string) => {
     queryKey: ['checkin-today', goalId],
     queryFn: async () => {
       if (!user) return null;
-      const today = todayUTC();
+      const today = todayLocal();
+      // Build local-timezone midnight boundaries as ISO strings
+      const startOfDay = new Date(`${today}T00:00:00`).toISOString();
+      const endOfDay   = new Date(`${today}T23:59:59.999`).toISOString();
       const { data, error } = await supabase
         .from('checkins')
         .select('*')
         .eq('goal_id', goalId)
         .eq('user_id', user.id)
-        .gte('checked_in_at', `${today}T00:00:00Z`)
-        .lt('checked_in_at', `${today}T23:59:59Z`)
+        .gte('checked_in_at', startOfDay)
+        .lte('checked_in_at', endOfDay)
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -46,13 +61,15 @@ export const useTodayCheckin = (goalId: string) => {
 // ─── All checkins for a goal (last 12 weeks) ─────────────────────
 export const useCheckins = (goalId: string) => {
   const { user } = useAuthStore();
-  const twelveWeeksAgo = new Date();
-  twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
 
   return useQuery<Checkin[]>({
     queryKey: ['checkins', goalId],
     queryFn: async () => {
       if (!user) return [];
+      // Compute the cutoff inside queryFn so it's always fresh on each fetch,
+      // even in long-running sessions where the hook was first called days ago.
+      const twelveWeeksAgo = new Date();
+      twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
       const { data, error } = await supabase
         .from('checkins')
         .select('*')

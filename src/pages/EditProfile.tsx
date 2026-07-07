@@ -249,9 +249,13 @@ export const EditProfile: React.FC = () => {
     if (!user || !profile?.avatar_url) return;
     setAvatarUploading(true);
     try {
-      // Extract storage path from the public URL (everything after /avatars/)
+      // Extract storage path robustly: take everything after the last /avatars/ segment
       const url = new URL(profile.avatar_url);
-      const storagePath = url.pathname.split('/avatars/')[1];
+      const avatarsMarker = '/avatars/';
+      const markerIdx = url.pathname.lastIndexOf(avatarsMarker);
+      const storagePath = markerIdx !== -1
+        ? url.pathname.slice(markerIdx + avatarsMarker.length)
+        : null;
       if (storagePath) {
         await supabase.storage.from('avatars').remove([storagePath]);
       }
@@ -324,7 +328,7 @@ export const EditProfile: React.FC = () => {
               ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
               : <UserIcon className="h-8 w-8 text-app-text-primary" />}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+          <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden" onChange={handleAvatarChange} />
         </div>
         <div>
           <p className="text-sm font-semibold text-app-text-body">{profile?.full_name || 'Your name'}</p>
