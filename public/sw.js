@@ -30,20 +30,27 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ── Fetch: cache-first for same-origin GET, network-only for everything else ──
+// ── Fetch: cache-first for static assets only ────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+
+  // Only handle GET
   if (request.method !== 'GET') return;
-  // Don't intercept Supabase API or any cross-origin requests
+
+  // Never intercept navigation requests (HTML / React routes) — let the
+  // browser fetch the shell index.html from the network as normal.
+  if (request.mode === 'navigate') return;
+
+  // Don't intercept cross-origin requests (Supabase API, CDNs, etc.)
   if (!request.url.startsWith(self.location.origin)) return;
-  // Don't intercept hot-reload or dev-specific paths
+
+  // Don't intercept Vite dev-server internals
   if (request.url.includes('__vite') || request.url.includes('/@')) return;
 
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request).then((res) => {
-        // Only cache successful opaque-safe responses for same-origin assets
         if (res.ok && res.type === 'basic') {
           const clone = res.clone();
           caches.open(CACHE).then((c) => c.put(request, clone));
