@@ -15,8 +15,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!user) {
-    // Preserve the intended destination so Login can redirect back after auth
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Send unauthenticated users to the landing page.
+    // Preserve the intended destination so the user can be redirected back after signing in.
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;

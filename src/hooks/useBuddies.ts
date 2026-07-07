@@ -258,6 +258,16 @@ export const useRemoveBuddy = () => {
         );
       if (challengeErr) throw challengeErr;
 
+      // Delete all messages between the two users
+      const { error: messagesErr } = await supabase
+        .from('messages')
+        .delete()
+        .or(
+          `and(sender_id.eq.${user.id},receiver_id.eq.${buddyId}),` +
+          `and(sender_id.eq.${buddyId},receiver_id.eq.${user.id})`
+        );
+      if (messagesErr) throw messagesErr;
+
       // Then remove the buddy relationship
       const { error } = await supabase
         .from('buddy_requests')
@@ -285,6 +295,10 @@ export const useRemoveBuddy = () => {
       queryClient.invalidateQueries({ queryKey: ['buddy-requests', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['challenges'] });
       queryClient.invalidateQueries({ queryKey: ['challenges-pending'] });
+      // Clear message queries so removed buddy's conversation disappears
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['messages-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['messages-overview'] });
     },
   });
 };
