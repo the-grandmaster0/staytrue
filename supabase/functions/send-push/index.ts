@@ -143,6 +143,15 @@ Deno.serve(async (req) => {
 
     const results = await Promise.allSettled(subs.map(async (sub: any) => {
       const origin = new URL(sub.endpoint).origin;
+
+      // ── WNS (Edge on Windows) requires OAuth2, not VAPID — skip gracefully ──
+      // WNS endpoints: notify.windows.com
+      // To support Edge/WNS, register an app at https://partner.microsoft.com/dashboard
+      // and add WNS_CLIENT_ID + WNS_CLIENT_SECRET secrets, then handle the token flow.
+      if (sub.endpoint.includes('notify.windows.com')) {
+        console.log('[send-push] skipping WNS endpoint (Edge/Windows) — VAPID not supported by WNS');
+        return { status: 'skipped_wns' };
+      }
       const [jwt, encrypted] = await Promise.all([
         makeVapidJwt(SUBJ, origin, PUB, PRIV),
         encryptPush(payload, sub.p256dh, sub.auth),
