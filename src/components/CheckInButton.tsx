@@ -6,13 +6,14 @@ import { useAuthStore } from '../store/useAuthStore';
 
 interface CheckInButtonProps {
   goalId: string;
+  goalTitle?: string;
   disabled?: boolean;
   onSuccess?: () => void;
   size?: 'sm' | 'md';
 }
 
 export const CheckInButton: React.FC<CheckInButtonProps> = ({
-  goalId, disabled = false, onSuccess, size = 'sm',
+  goalId, goalTitle, disabled = false, onSuccess, size = 'sm',
 }) => {
   const { user } = useAuthStore();
   const { data: todayCheckin, isLoading: isCheckingToday } = useTodayCheckin(goalId);
@@ -28,7 +29,7 @@ export const CheckInButton: React.FC<CheckInButtonProps> = ({
   const sizeClasses = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm';
 
   const doCheckin = (withNote?: string) => {
-    checkInMutation.mutate({ goalId, note: withNote?.trim() || undefined }, {
+    checkInMutation.mutate({ goalId, note: withNote?.trim() || undefined, goalTitle }, {
       onSuccess: () => {
         if (navigator.vibrate) navigator.vibrate(10);
         setShowNote(false);

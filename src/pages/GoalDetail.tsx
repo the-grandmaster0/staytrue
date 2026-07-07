@@ -132,7 +132,7 @@ export const GoalDetail: React.FC = () => {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
             <StreakCounter goalId={goal.id} frequency={goal.frequency} animateTrigger={animateTrigger} compact={false} />
             {isActionable && (
-              <CheckInButton goalId={goal.id} size="md" onSuccess={() => setAnimateTrigger((n) => n + 1)} />
+              <CheckInButton goalId={goal.id} goalTitle={goal.title} size="md" onSuccess={() => setAnimateTrigger((n) => n + 1)} />
             )}
           </div>
           <ContributionHeatmap checkins={checkins} isLoading={checkinsLoading} />

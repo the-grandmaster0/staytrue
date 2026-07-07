@@ -82,7 +82,7 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, daysMeta, onStatusTogg
       {/* Action row */}
       <div className="flex items-center justify-between gap-3 pt-3 border-t border-app-border">
         {isActionable ? (
-          <CheckInButton goalId={goal.id} onSuccess={() => setAnimateTrigger((n) => n + 1)} />
+          <CheckInButton goalId={goal.id} goalTitle={goal.title} onSuccess={() => setAnimateTrigger((n) => n + 1)} />
         ) : (
           <span className="text-xs text-app-text-secondary">
             {goal.status === 'paused' ? 'Paused' : 'Completed'}

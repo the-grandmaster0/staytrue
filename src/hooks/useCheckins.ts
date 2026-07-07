@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
+import { sendPush } from '../lib/sendPush';
 import { sanitizeTrunc } from '../lib/sanitize';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -104,11 +105,11 @@ export const useStreak = (goalId: string) => {
 
 // ─── Perform a check-in ───────────────────────────────────────────
 export const useCheckIn = () => {
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ goalId, note }: { goalId: string; note?: string }) => {
+    mutationFn: async ({ goalId, note, goalTitle }: { goalId: string; note?: string; goalTitle?: string }) => {
       if (!user) throw new Error('Not authenticated');
       const { data, error } = await supabase
         .from('checkins')
@@ -121,12 +122,42 @@ export const useCheckIn = () => {
         .select()
         .single();
       if (error) throw error;
-      return data as Checkin;
+      return { checkin: data as Checkin, goalTitle };
     },
-    onSuccess: (_data, { goalId }) => {
+    onSuccess: ({ checkin, goalTitle }) => {
+      const goalId = checkin.goal_id;
       queryClient.invalidateQueries({ queryKey: ['checkin-today', goalId] });
       queryClient.invalidateQueries({ queryKey: ['checkins', goalId] });
       queryClient.invalidateQueries({ queryKey: ['streak', goalId] });
+
+      // Fire push notifications to all buddies
+      (async () => {
+        if (!user) return;
+        const { data: buddies } = await supabase
+          .from('buddy_requests')
+          .select('sender_id, receiver_id')
+          .eq('status', 'accepted')
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+        const buddyIds = new Set<string>();
+        for (const row of buddies ?? []) {
+          const buddyId = row.sender_id === user.id ? row.receiver_id : row.sender_id;
+          buddyIds.add(buddyId);
+        }
+
+        const userName = profile?.full_name || profile?.username || 'Your buddy';
+        const title = goalTitle || 'a goal';
+
+        for (const buddyId of buddyIds) {
+          sendPush({
+            user_id: buddyId,
+            title: `🔥 ${userName} checked in!`,
+            body: `Just completed "${title}"`,
+            url: '/dashboard',
+            pref_key: 'buddy_checkin',
+          });
+        }
+      })();
     },
   });
 };

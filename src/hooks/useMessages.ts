@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
+import { sendPush } from '../lib/sendPush';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Message } from '../types/message';
 
@@ -182,7 +183,7 @@ export function useMarkMessagesRead(buddyId: string) {
 
 // ─── Send a message to a buddy ────────────────────────────────────────────────
 export function useSendMessage(buddyId: string) {
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -215,6 +216,23 @@ export function useSendMessage(buddyId: string) {
       queryClient.setQueryData<Message[]>(messagesKey(buddyId), (old = []) => {
         if (old.some((m) => m.id === newMsg.id)) return old;
         return [...old, newMsg];
+      });
+
+      // Fire-and-forget push notification to the recipient
+      const senderName = profile?.full_name || profile?.username || 'Your buddy';
+      const preview =
+        newMsg.message_type === 'reaction'
+          ? `${senderName} reacted to your message`
+          : newMsg.content.length > 80
+          ? `${newMsg.content.slice(0, 80)}…`
+          : newMsg.content;
+
+      sendPush({
+        user_id: buddyId,
+        title: `💬 ${senderName}`,
+        body: preview,
+        url: '/dashboard/messages',
+        pref_key: 'messages',
       });
     },
   });

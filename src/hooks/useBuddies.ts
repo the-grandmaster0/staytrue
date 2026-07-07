@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
+import { sendPush } from '../lib/sendPush';
 import { useAuthStore } from '../store/useAuthStore';
 import type { BuddyRequest, Buddy } from '../types/buddy';
 import type { Profile } from '../store/useAuthStore';
@@ -156,7 +157,7 @@ export const useBuddyStreak = (goalId: string, buddyId: string) => {
 
 // ─── Send buddy request ──────────────────────────────────────────
 export const useSendBuddyRequest = () => {
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -185,8 +186,18 @@ export const useSendBuddyRequest = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, { receiverId }) => {
       queryClient.invalidateQueries({ queryKey: ['buddy-requests', user?.id] });
+
+      // Notify the recipient of the buddy request
+      const senderName = profile?.full_name || profile?.username || 'Someone';
+      sendPush({
+        user_id: receiverId,
+        title: '🤝 Buddy request!',
+        body: `${senderName} wants to be your accountability buddy.`,
+        url: '/dashboard/find-buddy',
+        pref_key: 'buddy_checkin',
+      });
     },
   });
 };
