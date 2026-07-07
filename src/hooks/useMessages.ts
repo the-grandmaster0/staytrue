@@ -113,6 +113,7 @@ export function useMessages(buddyId: string) {
 }
 
 // ─── Total unread count across ALL conversations (for nav badge) ──────────────
+// Only counts messages from currently accepted buddies — deleted buddies are excluded.
 export function useUnreadMessageCount() {
   const { user } = useAuthStore();
 
@@ -120,17 +121,33 @@ export function useUnreadMessageCount() {
     queryKey: unreadCountKey(),
     queryFn: async () => {
       if (!user) return 0;
+
+      // Get accepted buddy IDs first so we only count messages from active buddies
+      const { data: buddyRows } = await supabase
+        .from('buddy_requests')
+        .select('sender_id, receiver_id')
+        .eq('status', 'accepted')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+      if (!buddyRows || buddyRows.length === 0) return 0;
+
+      const buddyIds = buddyRows.map((r: { sender_id: string; receiver_id: string }) =>
+        r.sender_id === user.id ? r.receiver_id : r.sender_id
+      );
+
       const { count, error } = await supabase
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('receiver_id', user.id)
+        .in('sender_id', buddyIds)
         .is('read_at', null);
+
       if (error) throw error;
       return count ?? 0;
     },
     enabled: !!user,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 10_000,
+    refetchInterval: 30_000,
   });
 }
 

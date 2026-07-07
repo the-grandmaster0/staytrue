@@ -1,32 +1,38 @@
 /**
- * sendPush — client-side helper to trigger a push notification for another user.
+ * sendPush — fire a push notification to another user via the send-push edge function.
  *
- * Calls the send-push edge function via supabase.functions.invoke so that the
- * anon JWT is forwarded automatically. The edge function handles:
- *   - Fetching the target user's push subscriptions
- *   - Checking their notification preferences (pref_key)
- *   - VAPID signing and encryption
- *
- * This is intentionally fire-and-forget — we never block the UI on it.
- * Errors are swallowed silently so a failed push never breaks app flow.
+ * Uses supabase.functions.invoke which automatically attaches the caller's
+ * JWT in the Authorization header. Fire-and-forget — never blocks the UI.
  */
 
 import { supabase } from './supabaseClient';
 
-interface PushPayload {
-  user_id: string;
-  title: string;
-  body: string;
-  url?: string;
+export interface PushPayload {
+  user_id:  string;
+  title:    string;
+  body:     string;
+  url?:     string;
   pref_key?: 'daily_reminder' | 'buddy_checkin' | 'messages' | 'challenges';
 }
 
 export async function sendPush(payload: PushPayload): Promise<void> {
   try {
-    await supabase.functions.invoke('send-push', {
+    const { data, error } = await supabase.functions.invoke('send-push', {
       body: payload,
     });
-  } catch {
-    // Intentionally silent — push is best-effort, never block UI
+
+    if (error) {
+      console.warn('[sendPush] error:', error.message);
+      return;
+    }
+
+    if (data?.skipped) {
+      console.log('[sendPush] skipped —', data.reason);
+      return;
+    }
+
+    console.log('[sendPush] sent ✓', payload.title, '→', payload.user_id.slice(0, 8));
+  } catch (err) {
+    console.warn('[sendPush] network error:', err);
   }
 }

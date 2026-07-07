@@ -1,320 +1,190 @@
 // supabase/functions/send-push/index.ts
-// Sends a Web Push notification using self-contained VAPID signing (no external deps).
 //
-// Body: { user_id, title, body, url?, pref_key? }
-// Secrets needed (supabase secrets set):
-//   VAPID_PUBLIC_KEY   — base64url uncompressed EC P-256 public key (same as VITE_VAPID_PUBLIC_KEY)
-//   VAPID_PRIVATE_KEY  — base64url raw EC P-256 private key scalar
-//   VAPID_SUBJECT      — mailto: or https: URI
-//   SUPABASE_URL       — injected automatically by Supabase
-//   SUPABASE_SERVICE_ROLE_KEY — injected automatically by Supabase
+// Delivers a Web Push notification to a target user.
+//
+// Required Supabase secrets (set via: supabase secrets set KEY=value):
+//   VAPID_PUBLIC_KEY   — same base64url key as VITE_VAPID_PUBLIC_KEY in client .env
+//   VAPID_PRIVATE_KEY  — EC P-256 private key scalar, base64url encoded
+//   VAPID_SUBJECT      — mailto: or https: URI  e.g. "mailto:admin@staytrue.app"
+//
+// Auto-injected by Supabase (do not set manually):
+//   SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+const CORS = {
+  'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// ── Simple in-memory rate limiter (per user_id) ──────────────────────────────
-const rateLimitCache = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(userId: string, maxRequests = 20, windowMs = 60_000): boolean {
+// ── Per-user rate limiter (in-memory, resets on cold start) ──────────────────
+const rl = new Map<string, { n: number; reset: number }>();
+function rateOk(id: string, max = 30, windowMs = 60_000): boolean {
   const now = Date.now();
-  const entry = rateLimitCache.get(userId);
-  if (!entry || now > entry.resetAt) {
-    rateLimitCache.set(userId, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (entry.count >= maxRequests) return false;
-  entry.count += 1;
+  const e   = rl.get(id);
+  if (!e || now > e.reset) { rl.set(id, { n: 1, reset: now + windowMs }); return true; }
+  if (e.n >= max) return false;
+  e.n++;
   return true;
 }
 
-// ── Base64url helpers ─────────────────────────────────────────────────────────
-function base64urlToBytes(b64: string): Uint8Array {
-  const padded = b64.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = (4 - (padded.length % 4)) % 4;
-  const raw = atob(padded + '='.repeat(pad));
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
-}
+// ── Base64url ────────────────────────────────────────────────────────────────
+const b64uToBytes = (s: string): Uint8Array => {
+  const p = s.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = (4 - (p.length % 4)) % 4;
+  return Uint8Array.from(atob(p + '='.repeat(pad)), (c) => c.charCodeAt(0));
+};
+const bytesToB64u = (b: Uint8Array): string =>
+  btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+const enc = (s: string) => new TextEncoder().encode(s);
 
-function bytesToBase64url(bytes: Uint8Array): string {
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-function utf8(str: string): Uint8Array {
-  return new TextEncoder().encode(str);
-}
-
-// ── Build a VAPID JWT (ES256) ─────────────────────────────────────────────────
-async function buildVapidJwt(
-  subject: string,
-  audience: string,
-  publicKeyB64: string,
-  privateKeyB64: string,
-): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'ES256', typ: 'JWT' };
-  const payload = { aud: audience, exp: now + 12 * 3600, sub: subject };
-
-  const headerB64  = bytesToBase64url(utf8(JSON.stringify(header)));
-  const payloadB64 = bytesToBase64url(utf8(JSON.stringify(payload)));
-  const signingInput = utf8(`${headerB64}.${payloadB64}`);
-
-  const privBytes = base64urlToBytes(privateKeyB64);
-  const pubBytes  = base64urlToBytes(publicKeyB64);
-
-  const jwk = {
+// ── VAPID JWT (ES256) ────────────────────────────────────────────────────────
+async function makeVapidJwt(sub: string, aud: string, pub: string, priv: string): Promise<string> {
+  const now  = Math.floor(Date.now() / 1000);
+  const hdr  = bytesToB64u(enc(JSON.stringify({ alg: 'ES256', typ: 'JWT' })));
+  const pay  = bytesToB64u(enc(JSON.stringify({ aud, exp: now + 43200, sub })));
+  const msg  = enc(`${hdr}.${pay}`);
+  const pb   = b64uToBytes(pub);
+  const key  = await crypto.subtle.importKey('jwk', {
     kty: 'EC', crv: 'P-256',
-    x: bytesToBase64url(pubBytes.slice(1, 33)),
-    y: bytesToBase64url(pubBytes.slice(33, 65)),
-    d: bytesToBase64url(privBytes),
-  };
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'],
-  );
-
-  const sigBuf = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' }, cryptoKey, signingInput.buffer as ArrayBuffer,
-  );
-
-  return `${headerB64}.${payloadB64}.${bytesToBase64url(new Uint8Array(sigBuf))}`;
+    x: bytesToB64u(pb.slice(1, 33)),
+    y: bytesToB64u(pb.slice(33, 65)),
+    d: bytesToB64u(b64uToBytes(priv)),
+  }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, msg));
+  return `${hdr}.${pay}.${bytesToB64u(sig)}`;
 }
 
-// ── Encrypt the push payload (RFC 8291 — aes128gcm) ─────────────────────────
-async function encryptPayload(
-  plaintext: string,
-  p256dhB64: string,
-  authB64: string,
-): Promise<{ ciphertext: Uint8Array; salt: Uint8Array; serverPublicKey: Uint8Array }> {
-  const salt           = crypto.getRandomValues(new Uint8Array(16));
-  const userPublicKey  = base64urlToBytes(p256dhB64);
-  const authSecret     = base64urlToBytes(authB64);
-  const plaintextBytes = utf8(plaintext);
+// ── RFC 8291 payload encryption (aes128gcm) ──────────────────────────────────
+async function encryptPush(plain: string, p256dh: string, authSecret: string) {
+  const salt      = crypto.getRandomValues(new Uint8Array(16));
+  const recvPub   = b64uToBytes(p256dh);
+  const authBytes = b64uToBytes(authSecret);
+  const text      = enc(plain);
 
-  const serverKeyPair = await crypto.subtle.generateKey(
-    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits'],
-  );
-  const serverPubRaw = new Uint8Array(
-    await crypto.subtle.exportKey('raw', serverKeyPair.publicKey),
-  );
+  const svrKP = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const svrPub = new Uint8Array(await crypto.subtle.exportKey('raw', svrKP.publicKey));
 
-  const subscriberKey = await crypto.subtle.importKey(
-    'raw', userPublicKey.buffer as ArrayBuffer,
-    { name: 'ECDH', namedCurve: 'P-256' }, false, [],
-  );
+  const recvKey = await crypto.subtle.importKey('raw', recvPub, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const shared  = await crypto.subtle.deriveBits({ name: 'ECDH', public: recvKey }, svrKP.privateKey, 256);
 
-  const sharedBits = await crypto.subtle.deriveBits(
-    { name: 'ECDH', public: subscriberKey }, serverKeyPair.privateKey, 256,
-  );
+  const cat = (...a: Uint8Array[]) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let off = 0; a.forEach((x) => { o.set(x, off); off += x.length; }); return o; };
 
-  const sharedKey = await crypto.subtle.importKey('raw', sharedBits, 'HKDF', false, ['deriveBits']);
+  const prk = await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveBits']);
+  const ikm = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: authBytes, info: cat(enc('WebPush: info\x00'), recvPub, svrPub) } as any, prk, 256);
+  const ikmKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
 
-  const concat = (...arrays: Uint8Array[]) => {
-    const out = new Uint8Array(arrays.reduce((n, a) => n + a.length, 0));
-    let off = 0;
-    for (const a of arrays) { out.set(a, off); off += a.length; }
-    return out;
-  };
+  const cek = await crypto.subtle.importKey('raw',
+    await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info: enc('Content-Encoding: aes128gcm\x00') } as any, ikmKey, 128),
+    'AES-GCM', false, ['encrypt']);
+  const iv = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info: enc('Content-Encoding: nonce\x00') } as any, ikmKey, 96);
 
-  const prkKeyBits = await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt: authSecret,
-      info: concat(utf8('WebPush: info\x00'), userPublicKey, serverPubRaw) } as any,
-    sharedKey, 256,
-  );
+  const padded = new Uint8Array(text.length + 1);
+  padded.set(text); padded[text.length] = 0x02;
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cek, padded));
 
-  const prkKey = await crypto.subtle.importKey('raw', prkKeyBits, 'HKDF', false, ['deriveBits']);
-
-  const cekBits = await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt,
-      info: utf8('Content-Encoding: aes128gcm\x00') } as any,
-    prkKey, 128,
-  );
-  const nonceBits = await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt,
-      info: utf8('Content-Encoding: nonce\x00') } as any,
-    prkKey, 96,
-  );
-
-  const cek = await crypto.subtle.importKey('raw', cekBits, 'AES-GCM', false, ['encrypt']);
-
-  const padded = new Uint8Array(plaintextBytes.length + 1);
-  padded.set(plaintextBytes);
-  padded[plaintextBytes.length] = 0x02;
-
-  const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonceBits }, cek, padded),
-  );
-
-  return { ciphertext, salt, serverPublicKey: serverPubRaw };
+  const rs = new Uint8Array(4); new DataView(rs.buffer).setUint32(0, 4096, false);
+  return cat(salt, rs, new Uint8Array([svrPub.length]), svrPub, ct);
 }
 
-function buildEncryptedBody(ct: Uint8Array, salt: Uint8Array, spk: Uint8Array): Uint8Array {
-  const rs = new Uint8Array(4);
-  new DataView(rs.buffer).setUint32(0, 4096, false);
-  const idlen = new Uint8Array([spk.length]);
-  const out = new Uint8Array(salt.length + rs.length + idlen.length + spk.length + ct.length);
-  let off = 0;
-  for (const a of [salt, rs, idlen, spk, ct]) { out.set(a, off); off += a.length; }
-  return out;
-}
-
-// ── Main handler ──────────────────────────────────────────────────────────────
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+// ── Handler ──────────────────────────────────────────────────────────────────
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   try {
-    // ── Verify the caller is an authenticated Supabase user ──────────────────
-    // This prevents unauthenticated abuse of the endpoint.
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+    const body = await req.json().catch(() => null);
+    if (!body) return json({ error: 'Invalid JSON body' }, 400);
+
+    const { user_id, title, body: msgBody, url = '/dashboard', pref_key } = body;
+
+    if (!user_id || !title || !msgBody) {
+      return json({ error: 'Missing required fields: user_id, title, body' }, 400);
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!rateOk(user_id)) return json({ error: 'Rate limit exceeded' }, 429);
 
-    // Verify the caller's JWT
-    const callerClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? serviceKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user: caller }, error: authError } = await callerClient.auth.getUser();
-    if (authError || !caller) {
-      console.error('[send-push] Auth failed:', authError?.message);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
-    const { user_id, title, body, url, pref_key } = await req.json();
-
-    if (!user_id || !title || !body) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: user_id, title, body' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-
-    if (!checkRateLimit(user_id, 20, 60_000)) {
-      return new Response(
-        JSON.stringify({ error: 'Rate limit exceeded' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-
-    // Use service role for all DB operations so RLS doesn't block
-    const adminClient = createClient(supabaseUrl, serviceKey);
-
-    // ── Check notification preference ────────────────────────────────────────
+    // Check per-user notification preference
     if (pref_key) {
-      const { data: prof } = await adminClient
-        .from('profiles')
-        .select('notification_prefs')
-        .eq('id', user_id)
-        .single();
-      const prefs = prof?.notification_prefs ?? {};
-      if (prefs[pref_key] === false) {
-        console.log(`[send-push] Skipped — pref "${pref_key}" disabled for ${user_id}`);
-        return new Response(
-          JSON.stringify({ skipped: true, reason: `pref ${pref_key} disabled` }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+      const { data: prof } = await db.from('profiles').select('notification_prefs').eq('id', user_id).single();
+      if ((prof?.notification_prefs ?? {})[pref_key] === false) {
+        console.log(`[send-push] skipped — pref "${pref_key}" off for ${user_id}`);
+        return json({ skipped: true, reason: `pref_${pref_key}_disabled` });
       }
     }
 
-    // ── Fetch subscriptions ──────────────────────────────────────────────────
-    const { data: subs, error: subErr } = await adminClient
+    // Fetch push subscriptions
+    const { data: subs, error: subErr } = await db
       .from('push_subscriptions')
       .select('endpoint, p256dh, auth')
       .eq('user_id', user_id);
 
-    if (subErr) {
-      console.error('[send-push] DB error fetching subs:', subErr.message);
-      throw subErr;
-    }
-    if (!subs || subs.length === 0) {
-      console.log(`[send-push] No subscriptions found for user ${user_id}`);
-      return new Response(
-        JSON.stringify({ skipped: true, reason: 'no subscription' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+    if (subErr) { console.error('[send-push] DB error:', subErr.message); throw subErr; }
+    if (!subs?.length) {
+      console.log(`[send-push] no subscriptions for ${user_id}`);
+      return json({ skipped: true, reason: 'no_subscription' });
     }
 
-    console.log(`[send-push] Sending to ${subs.length} subscription(s) for user ${user_id}`);
+    const PUB  = Deno.env.get('VAPID_PUBLIC_KEY');
+    const PRIV = Deno.env.get('VAPID_PRIVATE_KEY');
+    const SUBJ = Deno.env.get('VAPID_SUBJECT') || 'mailto:admin@staytrue.app';
 
-    const VAPID_PUBLIC_KEY  = Deno.env.get('VAPID_PUBLIC_KEY')!;
-    const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!;
-    const VAPID_SUBJECT     = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:admin@staytrue.app';
-
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-      console.error('[send-push] VAPID secrets missing — run: supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=...');
-      return new Response(
-        JSON.stringify({ error: 'VAPID secrets not configured on the server' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+    if (!PUB || !PRIV) {
+      console.error('[send-push] VAPID secrets not set — run: supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=...');
+      return json({ error: 'VAPID secrets not configured' }, 500);
     }
 
-    const payloadStr = JSON.stringify({ title, body, url: url ?? '/' });
+    const payload = JSON.stringify({ title, body: msgBody, url });
+    console.log(`[send-push] sending "${title}" to ${subs.length} sub(s) for ${user_id}`);
 
-    const results = await Promise.allSettled(
-      subs.map(async (sub: { endpoint: string; p256dh: string; auth: string }) => {
-        const endpointOrigin = new URL(sub.endpoint).origin;
+    const results = await Promise.allSettled(subs.map(async (sub: any) => {
+      const origin = new URL(sub.endpoint).origin;
+      const [jwt, encrypted] = await Promise.all([
+        makeVapidJwt(SUBJ, origin, PUB, PRIV),
+        encryptPush(payload, sub.p256dh, sub.auth),
+      ]);
 
-        const [jwt, encrypted] = await Promise.all([
-          buildVapidJwt(VAPID_SUBJECT, endpointOrigin, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY),
-          encryptPayload(payloadStr, sub.p256dh, sub.auth),
-        ]);
+      const resp = await fetch(sub.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type':     'application/octet-stream',
+          'Content-Encoding': 'aes128gcm',
+          'TTL':              '86400',
+          'Authorization':    `vapid t=${jwt},k=${PUB}`,
+        },
+        body: encrypted.buffer as ArrayBuffer,
+      });
 
-        const bodyBytes = buildEncryptedBody(
-          encrypted.ciphertext, encrypted.salt, encrypted.serverPublicKey,
-        );
+      console.log(`[send-push] push → ${resp.status} (${sub.endpoint.slice(0, 50)}...)`);
 
-        const resp = await fetch(sub.endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'Content-Encoding': 'aes128gcm',
-            'TTL': '86400',
-            'Authorization': `vapid t=${jwt},k=${VAPID_PUBLIC_KEY}`,
-          },
-          body: bodyBytes.buffer as ArrayBuffer,
-        });
+      // 410 Gone / 404 = subscription expired, remove it
+      if (resp.status === 410 || resp.status === 404) {
+        await db.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+        console.log('[send-push] removed stale subscription');
+      }
 
-        console.log(`[send-push] Push to ${sub.endpoint.slice(0, 60)}... → ${resp.status}`);
+      if (!resp.ok && resp.status !== 410 && resp.status !== 404) {
+        const txt = await resp.text().catch(() => '');
+        console.error(`[send-push] push service error ${resp.status}: ${txt}`);
+      }
 
-        if (resp.status === 410 || resp.status === 404) {
-          console.log(`[send-push] Removing stale subscription: ${resp.status}`);
-          await adminClient.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
-        }
+      return { status: resp.status };
+    }));
 
-        if (!resp.ok && resp.status !== 410 && resp.status !== 404) {
-          const text = await resp.text().catch(() => '');
-          console.error(`[send-push] Push service error ${resp.status}: ${text}`);
-        }
-
-        return { endpoint: sub.endpoint, status: resp.status };
-      }),
-    );
-
-    return new Response(JSON.stringify({ ok: true, results }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ ok: true, sent: subs.length, results });
   } catch (err) {
-    console.error('[send-push] Unhandled error:', err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('[send-push] unhandled error:', err);
+    return json({ error: String(err) }, 500);
   }
 });
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+}

@@ -1,127 +1,106 @@
-// public/sw.js — StayTrue Service Worker
-// Handles Web Push notifications and notification click actions.
-// Does NOT use workbox imports — the precache manifest is injected by VitePWA
-// at build time via the injectManifest strategy, but we cache manually to avoid
-// the missing workbox-precaching dependency.
+// ─────────────────────────────────────────────────────────────────────────────
+// StayTrue Service Worker
+// VitePWA injects self.__WB_MANIFEST here at build time (injectManifest strategy).
+// Handles: precaching, push notifications, notification clicks.
+// No external imports — zero dependencies.
+// ─────────────────────────────────────────────────────────────────────────────
 
-// VitePWA injects self.__WB_MANIFEST at build time. We cache those assets.
-const CACHE_NAME = 'staytrue-v1';
+const CACHE = 'staytrue-v2';
 
+// ── Install: precache VitePWA-injected assets ────────────────────────────────
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      // __WB_MANIFEST is injected by VitePWA at build time.
-      // In dev (SW disabled) this won't run anyway.
-      const manifest = self.__WB_MANIFEST || [];
-      const urls = manifest.map((entry) =>
-        typeof entry === 'string' ? entry : entry.url
+    caches.open(CACHE).then((cache) => {
+      const manifest = (self.__WB_MANIFEST || []).map((e) =>
+        typeof e === 'string' ? e : e.url
       );
-      // Precache all injected assets, ignoring failures for individual assets
-      return Promise.allSettled(urls.map((url) => cache.add(url)));
+      // Cache each asset individually; ignore individual failures
+      return Promise.allSettled(manifest.map((url) => cache.add(url)));
     })
   );
 });
 
+// ── Activate: claim clients + delete old caches ──────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    Promise.all([
-      self.clients.claim(),
-      // Clean up old caches
-      caches.keys().then((keys) =>
-        Promise.all(
-          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
-        )
-      ),
-    ])
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// ── Fetch: serve from cache, fall back to network ────────────────────────────
+// ── Fetch: cache-first for same-origin GET, network-only for everything else ──
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests for same-origin or precached assets
-  if (event.request.method !== 'GET') return;
+  const { request } = event;
+  if (request.method !== 'GET') return;
+  // Don't intercept Supabase API or any cross-origin requests
+  if (!request.url.startsWith(self.location.origin)) return;
+  // Don't intercept hot-reload or dev-specific paths
+  if (request.url.includes('__vite') || request.url.includes('/@')) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(request).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache successful same-origin responses
-        if (
-          response.ok &&
-          response.type === 'basic' &&
-          event.request.url.startsWith(self.location.origin)
-        ) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+      return fetch(request).then((res) => {
+        // Only cache successful opaque-safe responses for same-origin assets
+        if (res.ok && res.type === 'basic') {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(request, clone));
         }
-        return response;
+        return res;
       });
     })
   );
 });
 
-// ── Push event ────────────────────────────────────────────────────────────────
+// ── Push: display OS notification ────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let data;
+  let payload;
   try {
-    data = event.data.json();
+    payload = event.data.json();
   } catch {
-    data = { title: 'StayTrue', body: event.data.text(), url: '/' };
+    payload = { title: 'StayTrue', body: event.data.text(), url: '/dashboard' };
   }
 
-  const title = data.title || 'StayTrue';
-  const body  = data.body  || '';
-  const url   = data.url   || '/';
-
-  const options = {
-    body,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
-    tag: 'staytrue-' + url.replace(/\//g, '-'),
-    renotify: true,
-    requireInteraction: false,
-    data: { url },
-    actions: [
-      { action: 'open',    title: 'Open' },
-      { action: 'dismiss', title: 'Dismiss' },
-    ],
-  };
+  const title = String(payload.title || 'StayTrue');
+  const body  = String(payload.body  || '');
+  const url   = String(payload.url   || '/dashboard');
 
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.showNotification(title, {
+      body,
+      icon:               '/icons/icon-192.svg',
+      badge:              '/icons/icon-192.svg',
+      tag:                'staytrue-push',
+      renotify:           true,
+      requireInteraction: false,
+      data:               { url },
+    })
   );
 });
 
-// ── Notification click ────────────────────────────────────────────────────────
+// ── Notification click: focus or open the app ────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  if (event.action === 'dismiss') return;
-
-  const targetUrl = event.notification.data?.url || '/';
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/dashboard';
 
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clients) => {
-        // If there's already a window open on the right path, focus it
+        // Focus an existing tab if one is open
         for (const client of clients) {
-          try {
-            const clientPath = new URL(client.url).pathname;
-            if (clientPath === targetUrl && 'focus' in client) {
-              return client.focus();
-            }
-          } catch {
-            // ignore malformed URLs
+          if ('focus' in client) {
+            client.postMessage({ type: 'NAVIGATE', url: targetUrl });
+            return client.focus();
           }
         }
-        // Otherwise open a new window
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
-        }
+        // Otherwise open a new tab
+        return self.clients.openWindow(targetUrl);
       })
   );
 });
