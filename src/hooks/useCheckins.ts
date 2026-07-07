@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
-import { sendPush } from '../lib/sendPush';
+import { sendEmail } from '../lib/sendEmail';
 import { sanitizeTrunc } from '../lib/sanitize';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -149,11 +149,12 @@ export const useCheckIn = () => {
         const title = goalTitle || 'a goal';
 
         for (const buddyId of buddyIds) {
-          sendPush({
+          sendEmail({
             user_id: buddyId,
             title: `🔥 ${userName} checked in!`,
             body: `Just completed "${title}"`,
             url: '/dashboard',
+            type: 'checkin',
             pref_key: 'buddy_checkin',
           });
         }

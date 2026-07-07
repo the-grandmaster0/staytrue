@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
-import { sendPush } from '../lib/sendPush';
+import { sendEmail } from '../lib/sendEmail';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Message } from '../types/message';
 
@@ -244,11 +244,12 @@ export function useSendMessage(buddyId: string) {
           ? `${newMsg.content.slice(0, 80)}…`
           : newMsg.content;
 
-      sendPush({
+      sendEmail({
         user_id: buddyId,
         title: `💬 ${senderName}`,
         body: preview,
         url: '/dashboard/messages',
+        type: 'message',
         pref_key: 'messages',
       });
     },

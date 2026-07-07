@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthStore } from '../store/useAuthStore';
-import { registerServiceWorker } from '../hooks/usePushNotifications';
 import { usePresenceTracker } from '../hooks/usePresence';
 import { Loader2 } from 'lucide-react';
 
@@ -43,9 +42,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     initSession();
-
-    // Register service worker for push notifications (best-effort, non-blocking)
-    registerServiceWorker().catch(() => {});
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

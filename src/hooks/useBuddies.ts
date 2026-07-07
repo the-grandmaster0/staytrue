@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
-import { sendPush } from '../lib/sendPush';
+import { sendEmail } from '../lib/sendEmail';
 import { useAuthStore } from '../store/useAuthStore';
 import type { BuddyRequest, Buddy } from '../types/buddy';
 import type { Profile } from '../store/useAuthStore';
@@ -191,11 +191,12 @@ export const useSendBuddyRequest = () => {
 
       // Notify the recipient of the buddy request
       const senderName = profile?.full_name || profile?.username || 'Someone';
-      sendPush({
+      sendEmail({
         user_id: receiverId,
         title: '🤝 Buddy request!',
         body: `${senderName} wants to be your accountability buddy.`,
         url: '/dashboard/find-buddy',
+        type: 'buddy_request',
         pref_key: 'buddy_checkin',
       });
     },
