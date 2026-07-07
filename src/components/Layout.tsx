@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { ThemeToggle } from './ThemeToggle';
 import { useUnreadMessageCount } from '../hooks/useMessages';
-import { useUnreadNotifCount } from '../hooks/useNotifications';
 import { usePendingChallenges } from '../hooks/useChallenges';
 import { useIncomingBuddyRequestCount } from '../hooks/useBuddies';
 import { OnlineBadge } from './OnlineBadge';
@@ -14,7 +13,6 @@ import {
   Zap,
   Shuffle,
   MessageSquare,
-  Bell,
   Users,
   Swords,
 } from 'lucide-react';
@@ -28,7 +26,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadMessageCount();
-  const { data: unreadNotifCount = 0 } = useUnreadNotifCount();
   const { data: pendingChallenges = [] } = usePendingChallenges();
   const { data: incomingBuddyCount = 0 } = useIncomingBuddyRequestCount();
   const challengeBadge = pendingChallenges.length;
@@ -42,12 +39,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const sidebarNavItems = [
-    { label: 'Dashboard',     path: '/dashboard',                icon: LayoutDashboard, badge: 0                   },
-    { label: 'Find a Buddy',  path: '/dashboard/find-buddy',     icon: Shuffle,         badge: incomingBuddyCount  },
-    { label: 'Messages',      path: '/dashboard/messages',       icon: MessageSquare,   badge: unreadCount         },
-    { label: 'Challenges',    path: '/dashboard/challenges',     icon: Swords,          badge: challengeBadge      },
-    { label: 'Notifications', path: '/dashboard/notifications',  icon: Bell,            badge: unreadNotifCount        },
-    { label: 'Profile',       path: '/dashboard/profile',        icon: UserIcon,        badge: 0                   },
+    { label: 'Dashboard',    path: '/dashboard',             icon: LayoutDashboard, badge: 0                  },
+    { label: 'Find a Buddy', path: '/dashboard/find-buddy',  icon: Shuffle,         badge: incomingBuddyCount },
+    { label: 'Messages',     path: '/dashboard/messages',    icon: MessageSquare,   badge: unreadCount        },
+    { label: 'Challenges',   path: '/dashboard/challenges',  icon: Swords,          badge: challengeBadge     },
+    { label: 'Profile',      path: '/dashboard/profile',     icon: UserIcon,        badge: 0                  },
   ];
 
   const bottomNavItems = [
@@ -193,22 +189,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </p>
           </div>
         </div>
-        {/* Right actions — fixed width to keep logo centered */}
+        {/* Right actions */}
         <div className="flex items-center gap-1">
           <ThemeToggle />
-          <Link
-            to="/dashboard/notifications"
-            className="relative flex items-center justify-center w-10 h-10 border border-transparent text-app-text-secondary hover:text-blue-400 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all"
-            style={{ clipPath: hexClipSm }}
-            aria-label="Notifications"
-          >
-            <Bell className="h-[18px] w-[18px]" />
-            {unreadNotifCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 badge" style={{ fontSize: '8px', padding: '1px 4px' }}>
-                {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-              </span>
-            )}
-          </Link>
           <button
             onClick={handleSignOut}
             className="flex items-center justify-center w-10 h-10 border border-transparent text-app-text-secondary hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/5 transition-all cursor-pointer"
