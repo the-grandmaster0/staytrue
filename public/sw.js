@@ -5,7 +5,7 @@
 // No external imports — zero dependencies.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CACHE = 'staytrue-v2';
+const CACHE = 'staytrue-v3';
 
 // ── Install: precache VitePWA-injected assets ────────────────────────────────
 self.addEventListener('install', (event) => {
