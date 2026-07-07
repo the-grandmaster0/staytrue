@@ -89,11 +89,15 @@ export function usePresenceTracker() {
   const mountedRef = useRef(false);
 
   const writeHeartbeat = useCallback(async (userId: string) => {
-    const now = new Date().toISOString();
-    await supabase
-      .from('profiles')
-      .update({ last_seen_at: now })
-      .eq('id', userId);
+    try {
+      const now = new Date().toISOString();
+      await supabase
+        .from('profiles')
+        .update({ last_seen_at: now })
+        .eq('id', userId);
+    } catch {
+      // Silently ignore — network blip or tab backgrounded. Will retry on next interval.
+    }
   }, []);
 
   useEffect(() => {

@@ -138,6 +138,8 @@ Deno.serve(async (req) => {
       return json({ error: 'VAPID secrets not configured' }, 500);
     }
 
+    console.log(`[send-push] VAPID_PUBLIC_KEY first20="${PUB.slice(0,20)}" len=${PUB.length}`);
+
     const payload = JSON.stringify({ title, body: msgBody, url });
     console.log(`[send-push] sending "${title}" to ${subs.length} sub(s) for ${user_id}`);
 
@@ -168,7 +170,8 @@ Deno.serve(async (req) => {
         body: encrypted.buffer as ArrayBuffer,
       });
 
-      console.log(`[send-push] push → ${resp.status} (${sub.endpoint.slice(0, 50)}...)`);
+      const respText = await resp.text().catch(() => '');
+      console.log(`[send-push] push → ${resp.status} body="${respText.slice(0,200)}" endpoint="${sub.endpoint.slice(0, 60)}"`);
 
       // 410 Gone / 404 = subscription expired, remove it
       if (resp.status === 410 || resp.status === 404) {
@@ -176,12 +179,7 @@ Deno.serve(async (req) => {
         console.log('[send-push] removed stale subscription');
       }
 
-      if (!resp.ok && resp.status !== 410 && resp.status !== 404) {
-        const txt = await resp.text().catch(() => '');
-        console.error(`[send-push] push service error ${resp.status}: ${txt}`);
-      }
-
-      return { status: resp.status };
+      return { status: resp.status, body: respText.slice(0, 200) };
     }));
 
     return json({ ok: true, sent: subs.length, results });
