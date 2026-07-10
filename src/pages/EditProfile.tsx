@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
   User as UserIcon, Camera, Check, Loader2, Globe,
-  AtSign, FileText, Eye, EyeOff, ExternalLink, Trash2, Bell, AlertTriangle, LogOut, X,
+  AtSign, FileText, Eye, EyeOff, ExternalLink, Trash2, AlertTriangle, LogOut, X,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
@@ -30,7 +30,6 @@ const profileSchema = z.object({
     .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Only lowercase letters, numbers, hyphens and underscores'),
   bio:           z.string().max(160, 'Max 160 characters').optional(),
   timezone:      z.string().min(1, 'Required'),
-  reminder_time: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format').optional(),
   is_public:     z.boolean(),
 });
 type FormValues = z.infer<typeof profileSchema>;
@@ -84,7 +83,6 @@ export const EditProfile: React.FC = () => {
       username:      profile?.username ?? '',
       bio:           profile?.bio ?? '',
       timezone:      profile?.timezone ?? 'UTC',
-      reminder_time: profile?.reminder_time ?? '08:00',
       is_public:     profile?.is_public ?? true,
     },
   });
@@ -169,7 +167,6 @@ export const EditProfile: React.FC = () => {
           username:      values.username ? sanitize(values.username).toLowerCase() : null,
           bio:           values.bio ? sanitizeTrunc(values.bio, 160) : null,
           timezone:      values.timezone,
-          reminder_time: values.reminder_time || '08:00',
           is_public:     values.is_public,
         })
         .eq('id', user.id)
@@ -453,25 +450,6 @@ export const EditProfile: React.FC = () => {
             <select {...register('timezone')} className="input-field w-full px-4 py-2.5 text-sm">
               {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
             </select>
-          </div>
-
-          {/* Reminder time */}
-          <div>
-            <label className="block text-sm font-medium text-app-text-body mb-1.5">
-              <span className="flex items-center gap-1.5"><Bell className="h-3.5 w-3.5" /> Daily reminder time</span>
-            </label>
-            <input
-              type="time"
-              {...register('reminder_time')}
-              className={`input-field w-full px-4 py-2.5 text-sm ${errors.reminder_time ? 'border-red-500/60' : ''}`}
-            />
-            {errors.reminder_time ? (
-              <p className="mt-1 text-xs text-red-400">{errors.reminder_time.message}</p>
-            ) : (
-              <p className="mt-1 text-xs text-app-text-dim">
-                When to remind you to check in (in your timezone)
-              </p>
-            )}
           </div>
 
           {/* Public toggle */}
